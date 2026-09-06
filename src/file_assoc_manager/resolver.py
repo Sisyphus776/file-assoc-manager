@@ -39,7 +39,10 @@ def resolve(record: Association, reg: RegistryAdapter) -> None:
         if record.command is None and _has_delegate_execute(reg, record.prog_id):
             # UWP 等现代应用走 DelegateExecute，没有传统打开命令
             record.status = Status.UNKNOWN
-            record.reason = "由系统组件处理（DelegateExecute），无法按文件路径判断"
+            record.reason = (
+                "Handled by a system component (DelegateExecute), "
+                "cannot check file path."
+            )
             return
         path_source = record.command
     elif record.command:
@@ -53,16 +56,16 @@ def resolve(record: Association, reg: RegistryAdapter) -> None:
 
     if path is None:
         record.status = Status.UNKNOWN
-        record.reason = "打开命令无法解析出程序路径"
+        record.reason = "No usable program path in open command."
     elif _is_app_user_model_id(path):
         record.status = Status.UNKNOWN
-        record.reason = "UWP 应用，无法按文件路径判断"
+        record.reason = "UWP app, cannot check file path."
     elif os.path.isabs(path):
         if os.path.isfile(path):
             record.status = Status.VALID
         else:
             record.status = Status.INVALID
-            record.reason = f"程序文件不存在: {path}"
+            record.reason = f"Program file not found: {path}"
     else:
         resolved = _resolve_by_name(reg, path)
         if resolved:
@@ -70,7 +73,7 @@ def resolve(record: Association, reg: RegistryAdapter) -> None:
             record.status = Status.VALID
         else:
             record.status = Status.INVALID
-            record.reason = f"程序不存在或不在 PATH 中: {path}"
+            record.reason = f"Program not found or not in PATH: {path}"
 
 
 def _read_open_command(reg: RegistryAdapter, prog_id: str) -> str | None:

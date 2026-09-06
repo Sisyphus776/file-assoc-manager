@@ -132,7 +132,7 @@ class TestStatusClassification:
         )
         resolve(record, reg)
         assert record.status == Status.INVALID
-        assert "不存在" in record.reason
+        assert "not found" in record.reason
 
     def test_bare_name_resolved_via_app_paths(self):
         reg = MockRegistryAdapter(

@@ -1,17 +1,17 @@
-"""tkinter 图形界面。
+"""tkinter 图形界面（中英双语，代码内文案为英文 key）。
 
 薄封装：业务逻辑在 scanner/resolver/cleaner/backup/managed_progid，
 本模块只负责展示与触发。视觉验证由用户实机进行。
-
-三个页面均支持勾选框列（点击 ☑/☐ 切换）与批量操作确认。
 """
 
 import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+from . import i18n
 from .backup import BackupManager, Operation
 from .cleaner import remove_open_with_entry, remove_open_with_progid
+from .i18n import LANGUAGES, get_language, set_language, t, translate_reason
 from .managed_progid import ProgIdManager
 from .models import Association, RegistryView, Status
 from .registry import WinRegAdapter
@@ -19,74 +19,74 @@ from .resolver import resolve_all
 from .scanner import scan
 
 _STATUS_LABELS = {
-    Status.VALID: "有效",
-    Status.INVALID: "失效",
-    Status.UNKNOWN: "无法判断",
+    Status.VALID: "Valid",
+    Status.INVALID: "Invalid",
+    Status.UNKNOWN: "Unknown",
 }
 
 _VIEW_LABELS = {
-    RegistryView.USER: "用户级",
-    RegistryView.SYSTEM_64: "系统64位",
-    RegistryView.SYSTEM_32: "系统32位",
+    RegistryView.USER: "User level",
+    RegistryView.SYSTEM_64: "System 64-bit",
+    RegistryView.SYSTEM_32: "System 32-bit",
 }
 
-# 常见格式（置顶展示，带中文说明）；硬编码维护。
+# 常见格式（选择器置顶展示）；分组名与标签名是 i18n key。
 COMMON_FORMAT_GROUPS: dict[str, list[tuple[str, str]]] = {
-    "文档": [
-        ("Word 文档", ".docx"),
+    "Documents": [
+        ("Word Document", ".docx"),
         ("Word 97-2003", ".doc"),
-        ("PDF 文档", ".pdf"),
-        ("纯文本", ".txt"),
+        ("PDF Document", ".pdf"),
+        ("Plain Text", ".txt"),
         ("Markdown", ".md"),
-        ("Excel 表格", ".xlsx"),
-        ("PowerPoint 演示", ".pptx"),
-        ("CSV 表格", ".csv"),
-        ("RTF 文档", ".rtf"),
+        ("Excel Spreadsheet", ".xlsx"),
+        ("PowerPoint Presentation", ".pptx"),
+        ("CSV Table", ".csv"),
+        ("RTF Document", ".rtf"),
     ],
-    "图片": [
-        ("JPEG 图片", ".jpg"),
-        ("PNG 图片", ".png"),
-        ("GIF 图片", ".gif"),
-        ("BMP 图片", ".bmp"),
-        ("SVG 矢量图", ".svg"),
-        ("WebP 图片", ".webp"),
-        ("ICO 图标", ".ico"),
-        ("TIFF 图片", ".tif"),
+    "Images": [
+        ("JPEG Image", ".jpg"),
+        ("PNG Image", ".png"),
+        ("GIF Image", ".gif"),
+        ("BMP Image", ".bmp"),
+        ("SVG Vector", ".svg"),
+        ("WebP Image", ".webp"),
+        ("ICO Icon", ".ico"),
+        ("TIFF Image", ".tif"),
     ],
-    "音频": [
-        ("MP3 音频", ".mp3"),
-        ("WAV 音频", ".wav"),
-        ("FLAC 无损音频", ".flac"),
-        ("AAC 音频", ".aac"),
-        ("M4A 音频", ".m4a"),
-        ("OGG 音频", ".ogg"),
+    "Audio": [
+        ("MP3 Audio", ".mp3"),
+        ("WAV Audio", ".wav"),
+        ("FLAC Lossless Audio", ".flac"),
+        ("AAC Audio", ".aac"),
+        ("M4A Audio", ".m4a"),
+        ("OGG Audio", ".ogg"),
     ],
-    "视频": [
-        ("MP4 视频", ".mp4"),
-        ("MKV 视频", ".mkv"),
-        ("AVI 视频", ".avi"),
-        ("MOV 视频", ".mov"),
-        ("WMV 视频", ".wmv"),
-        ("FLV 视频", ".flv"),
-        ("WebM 视频", ".webm"),
+    "Video": [
+        ("MP4 Video", ".mp4"),
+        ("MKV Video", ".mkv"),
+        ("AVI Video", ".avi"),
+        ("MOV Video", ".mov"),
+        ("WMV Video", ".wmv"),
+        ("FLV Video", ".flv"),
+        ("WebM Video", ".webm"),
     ],
-    "压缩": [
-        ("ZIP 压缩包", ".zip"),
-        ("RAR 压缩包", ".rar"),
-        ("7Z 压缩包", ".7z"),
-        ("TAR 归档", ".tar"),
-        ("GZ 压缩", ".gz"),
+    "Archives": [
+        ("ZIP Archive", ".zip"),
+        ("RAR Archive", ".rar"),
+        ("7Z Archive", ".7z"),
+        ("TAR Archive", ".tar"),
+        ("GZ Archive", ".gz"),
     ],
-    "代码与网页": [
-        ("Python 脚本", ".py"),
-        ("C 源文件", ".c"),
-        ("Java 源文件", ".java"),
-        ("JSON 数据", ".json"),
-        ("XML 文档", ".xml"),
-        ("HTML 网页", ".html"),
-        ("CSS 样式", ".css"),
+    "Code & Web": [
+        ("Python Script", ".py"),
+        ("C Source File", ".c"),
+        ("Java Source File", ".java"),
+        ("JSON Data", ".json"),
+        ("XML Document", ".xml"),
+        ("HTML Page", ".html"),
+        ("CSS Stylesheet", ".css"),
         ("JavaScript", ".js"),
-        ("SQL 脚本", ".sql"),
+        ("SQL Script", ".sql"),
     ],
 }
 
@@ -99,9 +99,7 @@ def can_clean(record: Association) -> bool:
     )
 
 
-def current_default_of(
-    records: list[Association], extension: str
-) -> str | None:
+def current_default_of(records: list[Association], extension: str) -> str | None:
     """查扩展名当前的默认程序显示名；无 UserChoice 记录返回 None。"""
     ext_lower = extension.lower()
     choice = next(
@@ -140,7 +138,7 @@ class FormatPickerDialog(tk.Toplevel):
 
     def __init__(self, master, records: list[Association]):
         super().__init__(master)
-        self.title("选择文件格式")
+        self.title(t("Select file format"))
         self.geometry("520x560")
         self.transient(master)
         self.grab_set()
@@ -148,7 +146,7 @@ class FormatPickerDialog(tk.Toplevel):
 
         search_frame = ttk.Frame(self)
         search_frame.pack(fill="x", padx=8, pady=(8, 4))
-        ttk.Label(search_frame, text="搜索:").pack(side="left")
+        ttk.Label(search_frame, text=t("Search:")).pack(side="left")
         self.search_var = tk.StringVar()
         self.search_var.trace_add("write", lambda *_: self._apply_filter())
         ttk.Entry(search_frame, textvariable=self.search_var).pack(
@@ -156,8 +154,8 @@ class FormatPickerDialog(tk.Toplevel):
         )
 
         self.tree = ttk.Treeview(self, columns=("label", "ext"), show="headings")
-        self.tree.heading("label", text="名称")
-        self.tree.heading("ext", text="扩展名")
+        self.tree.heading("label", text=t("Name"))
+        self.tree.heading("ext", text=t("Extension"))
         self.tree.column("label", width=200)
         self.tree.column("ext", width=90)
         self.tree.pack(fill="both", expand=True, padx=8, pady=4)
@@ -167,8 +165,8 @@ class FormatPickerDialog(tk.Toplevel):
 
         buttons = ttk.Frame(self)
         buttons.pack(fill="x", padx=8, pady=(0, 8))
-        ttk.Button(buttons, text="确定", command=self._ok).pack(side="right")
-        ttk.Button(buttons, text="取消", command=self.destroy).pack(
+        ttk.Button(buttons, text=t("OK"), command=self._ok).pack(side="right")
+        ttk.Button(buttons, text=t("Cancel"), command=self.destroy).pack(
             side="right", padx=(0, 6)
         )
 
@@ -179,7 +177,7 @@ class FormatPickerDialog(tk.Toplevel):
         }
         for group in COMMON_FORMAT_GROUPS.values():
             for label, ext in group:
-                iid = self.tree.insert("", "end", values=(label, ext))
+                iid = self.tree.insert("", "end", values=(f"{t(label)}  {ext}", ext))
                 self._ext_by_iid[iid] = ext
         for ext in build_all_extensions(records):
             if ext.lower() in common_exts:
@@ -196,9 +194,7 @@ class FormatPickerDialog(tk.Toplevel):
         query = self.search_var.get().strip().lower()
         for iid, ext in self._ext_by_iid.items():
             label = self.tree.set(iid, "label")
-            should_show = (
-                not query or query in label.lower() or query in ext.lower()
-            )
+            should_show = not query or query in label.lower() or query in ext.lower()
             if should_show and not self._shown[iid]:
                 self.tree.reattach(iid, "", "end")
                 self._shown[iid] = True
@@ -214,9 +210,13 @@ class FormatPickerDialog(tk.Toplevel):
         ext = self._ext_by_iid[selection[0]]
         default = current_default_of(self._records, ext)
         if default is None:
-            self.default_label.configure(text=f"{ext} 当前默认：未设置")
+            self.default_label.configure(
+                text=t("{ext} current default: not set", ext=ext)
+            )
         else:
-            self.default_label.configure(text=f"{ext} 当前默认：{default}")
+            self.default_label.configure(
+                text=t("{ext} current default: {program}", ext=ext, program=default)
+            )
 
     def _ok(self):
         selection = self.tree.selection()
@@ -228,98 +228,153 @@ class FormatPickerDialog(tk.Toplevel):
 class FileAssocManagerApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("文件关联管家")
+        self.title(t("File Association Manager"))
         self.geometry("1150x680")
 
         self.reg = WinRegAdapter()
         self.backup = BackupManager()
+        self.config_path = self.backup.data_dir / "config.json"
+        set_language(i18n.load_language(self.config_path))
+
         self.progid_mgr = ProgIdManager(self.reg, self.backup)
         self.records: list[Association] = []
         self._scan_thread: threading.Thread | None = None
         self._check_state: dict[ttk.Treeview, set[str]] = {}
+        # 语言切换时需重设文案的控件与表头
+        self._i18n_labels: list[tuple[ttk.Widget, str, dict]] = []
+        self._trees: list[tuple[ttk.Treeview, tuple[str, ...]]] = []
 
         self._build_widgets()
         self._start_scan()
 
     # ---------- 界面骨架 ----------
 
+    def _register_label(self, widget: ttk.Widget, key: str, **kwargs) -> None:
+        widget.configure(text=t(key, **kwargs))
+        self._i18n_labels.append((widget, key, kwargs))
+
     def _build_widgets(self):
-        notebook = ttk.Notebook(self)
-        notebook.pack(fill="both", expand=True, padx=6, pady=6)
-        notebook.add(self._build_scan_page(notebook), text="扫描结果")
-        notebook.add(self._build_backup_page(notebook), text="备份与恢复")
-        notebook.add(self._build_managed_page(notebook), text="我的关联")
+        top = ttk.Frame(self)
+        top.pack(fill="x", padx=6, pady=(6, 0))
+        lang_label = ttk.Label(top)
+        self._register_label(lang_label, "Language:")
+        lang_label.pack(side="left")
+        self.lang_box = ttk.Combobox(
+            top,
+            values=list(LANGUAGES.values()),
+            state="readonly",
+            width=8,
+        )
+        self.lang_box.set(LANGUAGES[get_language()])
+        self.lang_box.pack(side="left", padx=(4, 0))
+        self.lang_box.bind("<<ComboboxSelected>>", self._on_language_change)
+
+        self.notebook = ttk.Notebook(self)
+        self.notebook.pack(fill="both", expand=True, padx=6, pady=6)
+        self._tab_keys = ("Scan Results", "Backup & Restore", "My Associations")
+        self.notebook.add(self._build_scan_page(self.notebook), text=t(self._tab_keys[0]))
+        self.notebook.add(self._build_backup_page(self.notebook), text=t(self._tab_keys[1]))
+        self.notebook.add(self._build_managed_page(self.notebook), text=t(self._tab_keys[2]))
+
+    def _on_language_change(self, _event=None):
+        display = self.lang_box.get()
+        language = next(k for k, v in LANGUAGES.items() if v == display)
+        set_language(language)
+        i18n.save_language(self.config_path, language)
+        self._apply_language()
+
+    def _apply_language(self):
+        self.title(t("File Association Manager"))
+        for index, key in enumerate(self._tab_keys):
+            self.notebook.tab(index, text=t(key))
+        for widget, key, kwargs in self._i18n_labels:
+            widget.configure(text=t(key, **kwargs))
+        for tree, header_keys in self._trees:
+            columns = tree["columns"][1:]  # 跳过勾选列
+            for col, key in zip(columns, header_keys):
+                tree.heading(col, text=t(key))
+        # 筛选下拉的选项与当前值
+        self.filter_box.configure(
+            values=(t("All"), t("Invalid"), t("Unknown"), t("Valid"))
+        )
+        self.filter_var.set(t("All"))
+        self._populate_scan()
+        self._populate_backup()
+        self._populate_managed()
+        self.lang_box.set(LANGUAGES[get_language()])
+        if self.records:
+            self.scan_status.configure(
+                text=t("{count} records", count=len(self.records))
+            )
 
     def _build_scan_page(self, parent) -> ttk.Frame:
         page = ttk.Frame(parent)
 
         toolbar = ttk.Frame(page)
         toolbar.pack(fill="x", pady=(0, 4))
-        ttk.Label(toolbar, text="筛选:").pack(side="left")
-        self.filter_var = tk.StringVar(value="全部")
-        filter_box = ttk.Combobox(
+        label = ttk.Label(toolbar)
+        self._register_label(label, "Filter:")
+        label.pack(side="left")
+        self.filter_var = tk.StringVar(value=t("All"))
+        self.filter_box = ttk.Combobox(
             toolbar,
             textvariable=self.filter_var,
-            values=("全部", "失效", "无法判断", "有效"),
+            values=(t("All"), t("Invalid"), t("Unknown"), t("Valid")),
             state="readonly",
-            width=10,
+            width=12,
         )
-        filter_box.pack(side="left", padx=(0, 8))
-        filter_box.bind("<<ComboboxSelected>>", lambda _e: self._populate_scan())
-        self.refresh_button = ttk.Button(
-            toolbar, text="重新扫描", command=self._start_scan
-        )
-        self.refresh_button.pack(side="left")
+        self.filter_box.pack(side="left", padx=(0, 8))
+        self.filter_box.bind("<<ComboboxSelected>>", lambda _e: self._populate_scan())
+        refresh = ttk.Button(toolbar, command=self._start_scan)
+        self._register_label(refresh, "Rescan")
+        refresh.pack(side="left")
         self.scan_status = ttk.Label(toolbar, text="")
         self.scan_status.pack(side="left", padx=10)
 
         columns = ("extension", "view", "status", "prog_id", "target", "reason")
-        headers = ("扩展名", "来源", "状态", "ProgID", "程序路径", "说明")
-        self.scan_tree = self._make_tree(
-            page, columns, headers, column_widths=(80, 80, 70, 220, 280, 300)
-        )
+        header_keys = ("Extension", "Source", "Status", "ProgID", "Program Path", "Note")
+        self.scan_tree = self._make_tree(page, columns, header_keys, (80, 80, 70, 220, 280, 300))
 
         bottom = ttk.Frame(page)
         bottom.pack(fill="x", pady=(4, 0))
-        ttk.Button(bottom, text="全选", command=lambda: self._check_all(self.scan_tree)).pack(
-            side="left"
+        select_all = ttk.Button(bottom, command=lambda: self._check_all(self.scan_tree))
+        self._register_label(select_all, "Select All")
+        select_all.pack(side="left")
+        clear = ttk.Button(bottom, command=lambda: self._clear_checks(self.scan_tree))
+        self._register_label(clear, "Clear")
+        clear.pack(side="left", padx=(4, 12))
+        clean = ttk.Button(bottom, command=self._clean_selected)
+        self._register_label(clean, "Clean checked items")
+        clean.pack(side="left")
+        hint = ttk.Label(bottom)
+        self._register_label(
+            hint,
+            "Only 'Open With' leftovers can be cleaned; system definitions "
+            "and UserChoice are read-only.",
         )
-        ttk.Button(bottom, text="清空", command=lambda: self._clear_checks(self.scan_tree)).pack(
-            side="left", padx=(4, 12)
-        )
-        self.clean_button = ttk.Button(
-            bottom, text="清理勾选条目", command=self._clean_selected
-        )
-        self.clean_button.pack(side="left")
-        ttk.Label(
-            bottom,
-            text="仅「打开方式残留」类条目可清理；系统定义与 UserChoice 只读展示",
-        ).pack(side="left", padx=10)
+        hint.pack(side="left", padx=10)
         return page
 
     def _build_backup_page(self, parent) -> ttk.Frame:
         page = ttk.Frame(parent)
         toolbar = ttk.Frame(page)
         toolbar.pack(fill="x", pady=(0, 4))
-        ttk.Button(toolbar, text="全选", command=lambda: self._check_all(self.backup_tree)).pack(
-            side="left"
-        )
-        ttk.Button(toolbar, text="清空", command=lambda: self._clear_checks(self.backup_tree)).pack(
-            side="left", padx=(4, 12)
-        )
-        self.restore_button = ttk.Button(
-            toolbar, text="恢复勾选条目", command=self._restore_selected
-        )
-        self.restore_button.pack(side="left")
-        ttk.Label(
-            toolbar, text="操作记录来自 %s" % self.backup.log_path
-        ).pack(side="left", padx=10)
+        select_all = ttk.Button(toolbar, command=lambda: self._check_all(self.backup_tree))
+        self._register_label(select_all, "Select All")
+        select_all.pack(side="left")
+        clear = ttk.Button(toolbar, command=lambda: self._clear_checks(self.backup_tree))
+        self._register_label(clear, "Clear")
+        clear.pack(side="left", padx=(4, 12))
+        restore = ttk.Button(toolbar, command=self._restore_selected)
+        self._register_label(restore, "Restore checked items")
+        restore.pack(side="left")
+        hint = ttk.Label(toolbar)
+        self._register_label(hint, "Operation log: {path}", path=str(self.backup.log_path))
+        hint.pack(side="left", padx=10)
 
         columns = ("timestamp", "extension", "key_path", "value_name", "value_data")
-        headers = ("时间", "扩展名", "键路径", "值名", "值内容")
-        self.backup_tree = self._make_tree(
-            page, columns, headers, column_widths=(180, 90, 330, 90, 260)
-        )
+        header_keys = ("Time", "Extension", "Key Path", "Value Name", "Value Data")
+        self.backup_tree = self._make_tree(page, columns, header_keys, (180, 90, 330, 90, 260))
         self._populate_backup()
         return page
 
@@ -327,48 +382,51 @@ class FileAssocManagerApp(tk.Tk):
         page = ttk.Frame(parent)
         form = ttk.Frame(page)
         form.pack(fill="x", pady=(0, 6))
-        ttk.Label(form, text="扩展名:").pack(side="left")
+        ext_label = ttk.Label(form)
+        self._register_label(ext_label, "Extension:")
+        ext_label.pack(side="left")
         self.ext_entry = ttk.Entry(form, width=12)
         self.ext_entry.pack(side="left", padx=(0, 4))
-        ttk.Button(form, text="选择格式...", command=self._pick_format).pack(
-            side="left", padx=(0, 8)
-        )
-        ttk.Label(form, text="程序路径:").pack(side="left")
+        pick = ttk.Button(form, command=self._pick_format)
+        self._register_label(pick, "Pick format...")
+        pick.pack(side="left", padx=(0, 8))
+        path_label = ttk.Label(form)
+        self._register_label(path_label, "Program path:")
+        path_label.pack(side="left")
         self.path_entry = ttk.Entry(form, width=50)
         self.path_entry.pack(side="left", padx=(0, 4))
-        ttk.Button(form, text="浏览...", command=self._browse_program).pack(
-            side="left", padx=(0, 8)
-        )
-        self.register_button = ttk.Button(
-            form, text="注册关联", command=self._register_association
-        )
-        self.register_button.pack(side="left")
+        browse = ttk.Button(form, command=self._browse_program)
+        self._register_label(browse, "Browse...")
+        browse.pack(side="left", padx=(0, 8))
+        register = ttk.Button(form, command=self._register_association)
+        self._register_label(register, "Register association")
+        register.pack(side="left")
 
         columns = ("prog_id", "extension", "program_path", "previous_default")
-        headers = ("ProgID", "扩展名", "程序路径", "注册前默认值")
-        self.managed_tree = self._make_tree(
-            page, columns, headers, column_widths=(160, 90, 320, 160)
-        )
+        header_keys = ("ProgID", "Extension", "Program Path", "Previous default")
+        self.managed_tree = self._make_tree(page, columns, header_keys, (160, 90, 320, 160))
         bottom = ttk.Frame(page)
         bottom.pack(fill="x", pady=(4, 0))
-        ttk.Button(bottom, text="全选", command=lambda: self._check_all(self.managed_tree)).pack(
-            side="left"
+        select_all = ttk.Button(bottom, command=lambda: self._check_all(self.managed_tree))
+        self._register_label(select_all, "Select All")
+        select_all.pack(side="left")
+        clear = ttk.Button(bottom, command=lambda: self._clear_checks(self.managed_tree))
+        self._register_label(clear, "Clear")
+        clear.pack(side="left", padx=(4, 12))
+        unregister = ttk.Button(bottom, command=self._unregister_selected)
+        self._register_label(unregister, "Unregister checked")
+        unregister.pack(side="left")
+        hint = ttk.Label(bottom)
+        self._register_label(
+            hint,
+            "Undo restores the previous default and removes the tool-created ProgID.",
         )
-        ttk.Button(bottom, text="清空", command=lambda: self._clear_checks(self.managed_tree)).pack(
-            side="left", padx=(4, 12)
-        )
-        self.unregister_button = ttk.Button(
-            bottom, text="撤销勾选关联", command=self._unregister_selected
-        )
-        self.unregister_button.pack(side="left")
-        ttk.Label(
-            bottom, text="撤销会恢复注册前的默认值并删除本工具创建的 ProgID"
-        ).pack(side="left", padx=10)
+        hint.pack(side="left", padx=10)
         self._populate_managed()
         return page
 
     def _make_tree(
-        self, parent, columns, headers, column_widths
+        self, parent, columns, header_keys, column_widths
     ) -> ttk.Treeview:
         """带勾选列的表格；勾选状态由 self._check_state 管理。"""
         frame = ttk.Frame(parent)
@@ -377,8 +435,8 @@ class FileAssocManagerApp(tk.Tk):
         tree = ttk.Treeview(frame, columns=full_columns, show="headings")
         tree.heading("_check", text="☑")
         tree.column("_check", width=34, anchor="center", stretch=False)
-        for col, header, width in zip(columns, headers, column_widths):
-            tree.heading(col, text=header)
+        for col, key, width in zip(columns, header_keys, column_widths):
+            tree.heading(col, text=t(key))
             tree.column(col, width=width)
         yscroll = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
         xscroll = ttk.Scrollbar(frame, orient="horizontal", command=tree.xview)
@@ -389,6 +447,7 @@ class FileAssocManagerApp(tk.Tk):
         frame.rowconfigure(0, weight=1)
         frame.columnconfigure(0, weight=1)
         self._check_state[tree] = set()
+        self._trees.append((tree, header_keys))
         tree.bind("<Button-1>", self._on_tree_click)
         return tree
 
@@ -426,8 +485,7 @@ class FileAssocManagerApp(tk.Tk):
     def _start_scan(self):
         if self._scan_thread and self._scan_thread.is_alive():
             return
-        self.refresh_button.configure(state="disabled")
-        self.scan_status.configure(text="扫描中...")
+        self.scan_status.configure(text=t("Scanning..."))
         self._scan_result: tuple | None = None
         self._scan_thread = threading.Thread(target=self._scan_worker, daemon=True)
         self._scan_thread.start()
@@ -455,24 +513,25 @@ class FileAssocManagerApp(tk.Tk):
     def _scan_done(self, records):
         self.records = records
         self._check_state[self.scan_tree].clear()  # 数据变了，旧勾选失效
-        self.refresh_button.configure(state="normal")
-        self.scan_status.configure(text="共 %d 条记录" % len(records))
+        self.scan_status.configure(text=t("{count} records", count=len(records)))
         self._populate_scan()
 
     def _scan_failed(self, exc):
-        self.refresh_button.configure(state="normal")
-        self.scan_status.configure(text="扫描失败")
-        messagebox.showerror("扫描失败", str(exc))
+        self.scan_status.configure(text=t("Scan failed"))
+        messagebox.showerror(t("Scan failed"), str(exc))
 
     def _populate_scan(self):
         self.scan_tree.delete(*self.scan_tree.get_children())
         selected = self.filter_var.get()
+        labels = (
+            (t("All"), None),
+            (t("Invalid"), Status.INVALID),
+            (t("Unknown"), Status.UNKNOWN),
+            (t("Valid"), Status.VALID),
+        )
+        want_status = next((s for label, s in labels if label == selected), None)
         for index, record in enumerate(self.records):
-            if selected == "失效" and record.status != Status.INVALID:
-                continue
-            if selected == "无法判断" and record.status != Status.UNKNOWN:
-                continue
-            if selected == "有效" and record.status != Status.VALID:
+            if want_status is not None and record.status != want_status:
                 continue
             self.scan_tree.insert(
                 "",
@@ -481,11 +540,11 @@ class FileAssocManagerApp(tk.Tk):
                 values=(
                     "",
                     record.extension,
-                    _VIEW_LABELS[record.view],
-                    _STATUS_LABELS[record.status],
+                    t(_VIEW_LABELS[record.view]),
+                    t(_STATUS_LABELS[record.status]),
                     record.prog_id or "",
                     record.target_path or "",
-                    record.reason or "",
+                    translate_reason(record.reason or ""),
                 ),
             )
         self._refresh_checks(self.scan_tree)
@@ -505,20 +564,26 @@ class FileAssocManagerApp(tk.Tk):
     def _clean_selected(self):
         checked_ids = self._check_state[self.scan_tree]
         if not checked_ids:
-            messagebox.showinfo("提示", "请先勾选要清理的条目")
+            messagebox.showinfo(t("Please check the items to clean first."), "")
             return
         targets = [self.records[int(i)] for i in checked_ids]
         cleanable = [r for r in targets if can_clean(r)]
         skipped = len(targets) - len(cleanable)
         if not cleanable:
             messagebox.showinfo(
-                "提示", "勾选的条目都不属于可清理的来源（仅「打开方式残留」可清理）"
+                t("None of the checked items can be cleaned (only 'Open With' leftovers)."),
+                "",
             )
             return
         if not messagebox.askyesno(
-            "确认清理",
-            f"将清理 {len(cleanable)} 条，跳过 {skipped} 条（不可清理的来源）。\n"
-            "每条清理前自动备份，可随时恢复。\n\n确认执行？",
+            t("Confirm Cleanup"),
+            t(
+                "Will clean {clean} item(s), skip {skip} item(s) that cannot be "
+                "cleaned.\nEach item is backed up before removal and can be "
+                "restored anytime.\n\nProceed?",
+                clean=len(cleanable),
+                skip=skipped,
+            ),
             parent=self,
         ):
             return
@@ -530,10 +595,12 @@ class FileAssocManagerApp(tk.Tk):
                 failed.append(f"{record.extension}: {exc}")
         if failed:
             messagebox.showerror(
-                "部分清理失败", "\n".join(failed[:5]), parent=self
+                t("Cleanup partially failed"), "\n".join(failed[:5]), parent=self
             )
         else:
-            messagebox.showinfo("清理完成", f"已清理 {len(cleanable)} 条")
+            messagebox.showinfo(
+                t("Cleanup complete"), t("Cleaned {count} item(s).", count=len(cleanable))
+            )
         self._populate_backup()
         self._start_scan()
 
@@ -551,7 +618,7 @@ class FileAssocManagerApp(tk.Tk):
                     operation.timestamp,
                     operation.extension,
                     operation.key_path,
-                    operation.value_name or "(默认值)",
+                    operation.value_name or t("(default value)"),
                     operation.value_data,
                 ),
             )
@@ -561,12 +628,16 @@ class FileAssocManagerApp(tk.Tk):
         operations = self.backup.list_operations()
         checked_ids = self._check_state[self.backup_tree]
         if not checked_ids:
-            messagebox.showinfo("提示", "请先勾选要恢复的操作记录")
+            messagebox.showinfo(t("Please check the operation records to restore first."), "")
             return
         selected = [operations[int(i)] for i in checked_ids]
         if not messagebox.askyesno(
-            "确认恢复",
-            f"将恢复 {len(selected)} 条操作记录（把值写回原位置）。\n\n确认执行？",
+            t("Confirm Restore"),
+            t(
+                "Will restore {count} operation record(s) (writing values back).\n\n"
+                "Proceed?",
+                count=len(selected),
+            ),
             parent=self,
         ):
             return
@@ -575,10 +646,12 @@ class FileAssocManagerApp(tk.Tk):
                 self.backup.restore(self.reg, operation)
             except Exception as exc:
                 messagebox.showerror(
-                    "恢复失败", f"{operation.key_path}: {exc}", parent=self
+                    t("Restore failed"), f"{operation.key_path}: {exc}", parent=self
                 )
                 return
-        messagebox.showinfo("恢复完成", f"已恢复 {len(selected)} 条")
+        messagebox.showinfo(
+            t("Restore complete"), t("Restored {count} item(s).", count=len(selected))
+        )
         self._start_scan()
 
     # ---------- 我的关联页 ----------
@@ -592,7 +665,8 @@ class FileAssocManagerApp(tk.Tk):
 
     def _browse_program(self):
         path = filedialog.askopenfilename(
-            title="选择程序", filetypes=[("可执行程序", "*.exe"), ("所有文件", "*.*")]
+            title=t("Select program"),
+            filetypes=[(t("Executables"), "*.exe"), (t("All files"), "*.*")],
         )
         if path:
             self.path_entry.delete(0, "end")
@@ -602,12 +676,18 @@ class FileAssocManagerApp(tk.Tk):
         extension = self.ext_entry.get().strip()
         program_path = self.path_entry.get().strip()
         if not extension or not program_path:
-            messagebox.showinfo("提示", "请填写扩展名和程序路径（可点「选择格式...」）")
+            messagebox.showinfo(
+                t(
+                    "Please fill in the extension and program path "
+                    "(or use 'Pick format...')."
+                ),
+                "",
+            )
             return
         try:
             self.progid_mgr.register(extension, program_path)
         except Exception as exc:
-            messagebox.showerror("注册失败", str(exc), parent=self)
+            messagebox.showerror(t("Register failed"), str(exc), parent=self)
             return
         self.ext_entry.delete(0, "end")
         self.path_entry.delete(0, "end")
@@ -626,7 +706,7 @@ class FileAssocManagerApp(tk.Tk):
                     managed.prog_id,
                     managed.extension,
                     managed.program_path,
-                    managed.previous_default or "(无)",
+                    managed.previous_default or t("(none)"),
                 ),
             )
         self._refresh_checks(self.managed_tree)
@@ -635,12 +715,16 @@ class FileAssocManagerApp(tk.Tk):
         managed = self.progid_mgr.list_managed()
         checked_ids = self._check_state[self.managed_tree]
         if not checked_ids:
-            messagebox.showinfo("提示", "请先勾选要撤销的关联")
+            messagebox.showinfo(t("Please check the associations to unregister first."), "")
             return
         selected = [managed[int(i)] for i in checked_ids]
         if not messagebox.askyesno(
-            "确认撤销",
-            f"将撤销 {len(selected)} 条关联（恢复注册前的默认值）。\n\n确认执行？",
+            t("Confirm Unregister"),
+            t(
+                "Will unregister {count} association(s) (restoring previous "
+                "defaults).\n\nProceed?",
+                count=len(selected),
+            ),
             parent=self,
         ):
             return
@@ -649,10 +733,13 @@ class FileAssocManagerApp(tk.Tk):
                 self.progid_mgr.unregister(entry.prog_id)
             except Exception as exc:
                 messagebox.showerror(
-                    "撤销失败", f"{entry.prog_id}: {exc}", parent=self
+                    t("Unregister failed"), f"{entry.prog_id}: {exc}", parent=self
                 )
                 return
-        messagebox.showinfo("撤销完成", f"已撤销 {len(selected)} 条关联")
+        messagebox.showinfo(
+            t("Unregister complete"),
+            t("Unregistered {count} association(s).", count=len(selected)),
+        )
         self._populate_managed()
         self._start_scan()
 
