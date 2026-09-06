@@ -1,5 +1,0 @@
-Metadata-Version: 2.4
-Name: file-assoc-manager
-Version: 0.1.0
-Summary: A recoverable Windows file association manager
-Requires-Python: >=3.11

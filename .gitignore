@@ -6,3 +6,6 @@ dist/
 work/
 *.reg
 .pytest_cache/
+*.egg-info/
+FamDebug.spec
+
