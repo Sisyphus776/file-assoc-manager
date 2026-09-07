@@ -20,7 +20,7 @@ if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed with exit code $LASTEXITCOD
 
 # 打包分发 zip：README/LICENSE 复制进构建目录，压缩并生成 SHA-256。
 # 版本号与 pyproject.toml 保持一致，升级时两处同步改。
-$version = '0.2.0'
+$version = '0.2.1'
 $root = 'D:\AgentWorkPlace\code\file-assoc-manager'
 $appDir = "$root\dist\FileAssocManager"
 Copy-Item "$root\README.txt", "$root\LICENSE" -Destination $appDir -Force

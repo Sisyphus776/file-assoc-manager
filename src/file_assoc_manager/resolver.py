@@ -104,7 +104,9 @@ def _extract_program_path(command: str) -> str | None:
     """从打开命令字符串中提取程序路径。
 
     处理引号包裹的路径、%VAR% 环境变量与 "%1" 等参数。
-    不校验文件是否存在。
+    无引号且路径含空格时（如 D:\\Program Files\\...\\app.exe），
+    从首 token 起逐个追加，取最长的「确实存在的文件」路径；
+    遇到 "%1" 或以 .exe 结尾即停。不保证文件存在（可能已卸载）。
     """
     command = os.path.expandvars(command.strip())
     if not command:
@@ -112,7 +114,20 @@ def _extract_program_path(command: str) -> str | None:
     if command.startswith('"'):
         end = command.find('"', 1)
         return command[1:end] if end != -1 else command[1:]
-    return command.split(None, 1)[0]
+    parts = command.split()
+    candidate = parts[0]
+    best = candidate
+    for token in parts[1:]:
+        candidate += " " + token
+        if os.path.isfile(candidate):
+            best = candidate
+        if token == "%1":
+            break
+        if candidate.lower().endswith(".exe"):
+            # .exe 结尾说明路径已完整，即使文件不存在（已卸载）
+            best = candidate
+            break
+    return best
 
 
 def _resolve_by_name(reg: RegistryAdapter, name: str) -> str | None:

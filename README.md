@@ -10,7 +10,7 @@ A portable file association manager for Windows 10/11. Offline, no installation,
 
 ### 当前阶段
 
-已完成 v0.2.0：只读扫描、失效检测、选择性清理、备份恢复、本工具创建的关联管理、中英双语 tkinter GUI（可切换）、PyInstaller 便携包。发布包见 [Releases](../../releases)。
+已完成 v0.2.1：只读扫描、失效检测、选择性清理、备份恢复、本工具创建的关联管理、中英双语 tkinter GUI（可切换）、PyInstaller 便携包。发布包见 [Releases](../../releases)。
 
 ### 目标
 
@@ -43,7 +43,7 @@ pwsh.exe -NoProfile -File build.ps1
 
 ### Status
 
-v0.2.0 released: read-only scanning, broken-association detection, selective cleanup, backup & restore, managed ProgIDs for portable apps, bilingual (Chinese/English) tkinter GUI, PyInstaller portable build. See [Releases](../../releases) for downloads.
+v0.2.1 released: read-only scanning, broken-association detection, selective cleanup, backup & restore, managed ProgIDs for portable apps, bilingual (Chinese/English) tkinter GUI, PyInstaller portable build. See [Releases](../../releases) for downloads.
 
 ### Goals
 

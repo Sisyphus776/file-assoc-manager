@@ -4,6 +4,7 @@ from file_assoc_manager.gui import (
     build_all_extensions,
     can_clean,
     current_default_of,
+    source_kind,
 )
 from file_assoc_manager.models import Association, RegistryView, Status
 
@@ -17,16 +18,45 @@ def rec(
     command=None,
     target_path=None,
     status=Status.UNKNOWN,
+    view=USER,
 ):
     return Association(
         extension=extension,
         source=source,
-        view=USER,
+        view=view,
         prog_id=prog_id,
         command=command,
         target_path=target_path,
         status=status,
     )
+
+
+class TestSourceKind:
+    def test_open_with_list(self):
+        record = rec(source=r"HKCU\...\FileExts\.txt\OpenWithList", command="n.exe")
+        assert source_kind(record) == "Open with leftovers"
+
+    def test_open_with_progids(self):
+        record = rec(
+            source=r"HKCU\...\FileExts\.txt\OpenWithProgids", prog_id="txtfile"
+        )
+        assert source_kind(record) == "Open with ProgIDs"
+
+    def test_user_choice(self):
+        record = rec(source=r"HKCU\...\FileExts\.txt\UserChoice", prog_id="txtfile")
+        assert source_kind(record) == "System default"
+
+    def test_user_classes(self):
+        record = rec(source=r"HKCU\Software\Classes\.txt", prog_id="txtfile")
+        assert source_kind(record) == "User association"
+
+    def test_system_64(self):
+        record = rec(source=r"HKCR\.txt", view=RegistryView.SYSTEM_64)
+        assert source_kind(record) == "System association (64-bit)"
+
+    def test_system_32(self):
+        record = rec(source=r"HKCR\.txt", view=RegistryView.SYSTEM_32)
+        assert source_kind(record) == "System association (32-bit)"
 
 
 class TestCanClean:

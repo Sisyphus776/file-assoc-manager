@@ -43,9 +43,13 @@ ZH_TABLE: dict[str, str] = {
     "ProgID": "ProgID",
     "Program Path": "程序路径",
     "Note": "说明",
-    "User level": "用户级",
-    "System 64-bit": "系统64位",
-    "System 32-bit": "系统32位",
+    # 来源类型
+    "System default": "系统默认",
+    "Open with leftovers": "打开方式残留",
+    "Open with ProgIDs": "打开方式 ProgID",
+    "User association": "用户关联定义",
+    "System association (64-bit)": "系统关联定义 (64位)",
+    "System association (32-bit)": "系统关联定义 (32位)",
     # 备份恢复页
     "Restore checked items": "恢复勾选条目",
     "Operation log: {path}": "操作记录来自 {path}",

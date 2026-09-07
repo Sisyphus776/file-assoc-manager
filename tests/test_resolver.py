@@ -95,6 +95,44 @@ class TestExtractProgramPath:
         resolve(record, reg)
         assert record.target_path == "C:\\win\\app.exe"
 
+    def test_unquoted_path_with_spaces_existing(self, tmp_path):
+        """无引号且含空格：逐 token 拼接找到真实文件。"""
+        exe = tmp_path / "Program Files" / "App" / "app.exe"
+        exe.parent.mkdir(parents=True)
+        exe.write_bytes(b"")
+        record = make_record(prog_id="p")
+        reg = MockRegistryAdapter(
+            {
+                ViewKey.USER_CLASSES: mock_key(
+                    subkeys=classes_tree("p", f"{exe} --from x")
+                )
+            }
+        )
+        resolve(record, reg)
+        assert record.target_path == str(exe)
+        assert record.status == Status.VALID
+
+    def test_unquoted_path_with_spaces_uninstalled(self):
+        """路径不存在（程序已卸载）也要完整提取，不能截断到第一个空格。"""
+        record = make_record(prog_id="p")
+        reg = MockRegistryAdapter(
+            {
+                ViewKey.USER_CLASSES: mock_key(
+                    subkeys=classes_tree(
+                        "p",
+                        'D:\\Program Files\\Tencent\\Androws\\AndrowsLauncher.exe '
+                        '--from "13"',
+                    )
+                )
+            }
+        )
+        resolve(record, reg)
+        assert (
+            record.target_path
+            == "D:\\Program Files\\Tencent\\Androws\\AndrowsLauncher.exe"
+        )
+        assert record.status == Status.INVALID
+
     def test_env_var_expansion(self, monkeypatch):
         monkeypatch.setenv("TEST_APP_DIR", "C:\\envdir")
         record = make_record(prog_id="p")

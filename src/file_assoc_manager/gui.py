@@ -30,6 +30,23 @@ _VIEW_LABELS = {
     RegistryView.SYSTEM_32: "System 32-bit",
 }
 
+
+def source_kind(record: Association) -> str:
+    """记录来源类型（i18n key）：只有 Open with 两类可清理。"""
+    if "\\UserChoice" in record.source:
+        return "System default"
+    if "\\OpenWithList" in record.source:
+        return "Open with leftovers"
+    if "\\OpenWithProgids" in record.source:
+        return "Open with ProgIDs"
+    if record.source.startswith(r"HKCU\Software\Classes"):
+        return "User association"
+    if record.view == RegistryView.SYSTEM_64:
+        return "System association (64-bit)"
+    if record.view == RegistryView.SYSTEM_32:
+        return "System association (32-bit)"
+    return "System association"
+
 # 常见格式（选择器置顶展示）；分组名与标签名是 i18n key。
 COMMON_FORMAT_GROUPS: dict[str, list[tuple[str, str]]] = {
     "Documents": [
@@ -453,6 +470,13 @@ class FileAssocManagerApp(tk.Tk):
 
     # ---------- 勾选交互 ----------
 
+    def _row_cleanable(self, tree, iid) -> bool:
+        """扫描页按记录判断可清理；其余页面所有行都可勾选。"""
+        if tree is not self.scan_tree:
+            return True
+        record = self.records[int(iid)]
+        return can_clean(record)
+
     def _on_tree_click(self, event):
         tree = event.widget
         if tree not in self._check_state or tree.identify_column(event.x) != "#1":
@@ -460,6 +484,8 @@ class FileAssocManagerApp(tk.Tk):
         iid = tree.identify_row(event.y)
         if not iid:
             return
+        if not self._row_cleanable(tree, iid):
+            return  # 不可清理的行不提供勾选
         checked = self._check_state[tree]
         if iid in checked:
             checked.discard(iid)
@@ -470,10 +496,15 @@ class FileAssocManagerApp(tk.Tk):
     def _refresh_checks(self, tree):
         checked = self._check_state[tree]
         for iid in tree.get_children():
-            tree.set(iid, "_check", "☑" if iid in checked else "☐")
+            if self._row_cleanable(tree, iid):
+                tree.set(iid, "_check", "☑" if iid in checked else "☐")
+            else:
+                tree.set(iid, "_check", "—")
 
     def _check_all(self, tree):
-        self._check_state[tree].update(tree.get_children())
+        for iid in tree.get_children():
+            if self._row_cleanable(tree, iid):
+                self._check_state[tree].add(iid)
         self._refresh_checks(tree)
 
     def _clear_checks(self, tree):
@@ -540,7 +571,7 @@ class FileAssocManagerApp(tk.Tk):
                 values=(
                     "",
                     record.extension,
-                    t(_VIEW_LABELS[record.view]),
+                    t(source_kind(record)),
                     t(_STATUS_LABELS[record.status]),
                     record.prog_id or "",
                     record.target_path or "",
