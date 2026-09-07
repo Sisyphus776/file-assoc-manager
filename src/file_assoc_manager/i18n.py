@@ -33,8 +33,9 @@ ZH_TABLE: dict[str, str] = {
     "Clean checked items": "清理勾选条目",
     "Select All": "全选",
     "Clear": "清空",
-    "Only 'Open With' leftovers can be cleaned; system definitions and UserChoice are read-only.": (
-        "仅「打开方式残留」类条目可清理；系统定义与 UserChoice 只读展示"
+    "Open with leftovers and invalid user definitions can be cleaned; "
+    "system definitions and UserChoice are read-only.": (
+        "打开方式残留与失效的用户关联定义可清理；系统定义与 UserChoice 只读展示"
     ),
     # 扫描页表头与状态
     "Extension": "扩展名",
@@ -83,15 +84,22 @@ ZH_TABLE: dict[str, str] = {
     "Please check the items to clean first.": "请先勾选要清理的条目",
     "Please check the operation records to restore first.": "请先勾选要恢复的操作记录",
     "Please check the associations to unregister first.": "请先勾选要撤销的关联",
-    "None of the checked items can be cleaned (only 'Open With' leftovers).": (
-        "勾选的条目都不属于可清理的来源（仅「打开方式残留」可清理）"
+    "None of the checked items can be cleaned.": (
+        "勾选的条目都不属于可清理的来源"
     ),
     "Confirm Cleanup": "确认清理",
-    "Will clean {clean} item(s), skip {skip} item(s) that cannot be cleaned.\n"
-    "Each item is backed up before removal and can be restored anytime.\n\nProceed?": (
-        "将清理 {clean} 条，跳过 {skip} 条（不可清理的来源）。\n"
-        "每条清理前自动备份，可随时恢复。\n\n确认执行？"
+    "Will clean {clean} item(s), skip {skip} item(s) that cannot be cleaned.": (
+        "将清理 {clean} 条，跳过 {skip} 条（不可清理的来源）。"
     ),
+    "Open with leftovers: {n} item(s).": "打开方式残留：{n} 条",
+    "Invalid definitions: {n} item(s).": "失效关联定义：{n} 条",
+    "of which {n} include shell extensions that will stop working too.": (
+        "其中 {n} 条包含右键菜单/预览等扩展功能，清理后一并失效"
+    ),
+    "Each item is backed up before removal and can be restored anytime.": (
+        "每条清理前自动备份，可随时恢复。"
+    ),
+    "Proceed?": "确认执行？",
     "Cleanup partially failed": "部分清理失败",
     "Cleanup complete": "清理完成",
     "Cleaned {count} item(s).": "已清理 {count} 条",

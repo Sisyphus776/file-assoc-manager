@@ -1,11 +1,12 @@
-"""选择性清理：删除 OpenWithList / OpenWithProgids 的指定条目。
+"""选择性清理：删除打开方式残留与用户级失效关联定义。
 
 流程固定为「备份 -> 删除」（docs/design.md 第 4 节）：
 record_removal 成功后才执行删除，未找到目标条目时不做任何操作。
-只删除单个值，不删除整个键。
+只删除单个值，不删除整个键，更不碰 ProgID 键树。
 """
 
 from .backup import BackupManager, Operation
+from .models import Association, RegistryView, Status
 from .registry import RegistryAdapter, ViewKey
 
 
@@ -53,4 +54,69 @@ def remove_open_with_progid(
         view, path, prog_id, values[prog_id], extension
     )
     reg.delete_value(view, path, prog_id)
+    return operation
+
+
+# ProgID 键树上的标志性附加功能分支（大小写不敏感）。
+# 这些分支存在说明定义承载了「打开命令」之外的功能。
+_EXTRAS_KEYS = {
+    "shellex",
+    "defaulticon",
+    "drophandler",
+    "previewhandlers",
+    "iconhandler",
+}
+
+_PROGID_VIEWS = (
+    ViewKey.USER_CLASSES,
+    ViewKey.SYSTEM_CLASSES_64,
+    ViewKey.SYSTEM_CLASSES_32,
+)
+
+
+def progid_has_extras(reg: RegistryAdapter, prog_id: str) -> bool:
+    """检测 ProgID 键树是否承载打开命令之外的功能（右键扩展、
+    图标、预览、拖放等）。跨三个视图查找；检测是启发式的，
+    未命中不代表穷尽所有扩展类型。"""
+    for view in _PROGID_VIEWS:
+        for sub in reg.list_subkeys(view, prog_id):
+            lowered = sub.lower()
+            if lowered in _EXTRAS_KEYS:
+                return True
+            if lowered == "shell":
+                shell_subs = reg.list_subkeys(view, f"{prog_id}\\shell")
+                if any(s.lower() != "open" for s in shell_subs):
+                    return True
+    return False
+
+
+def remove_user_class_definition(
+    reg: RegistryAdapter, backup: BackupManager, record: Association
+) -> Operation | None:
+    """删除用户级失效关联定义（HKCU\\Software\\Classes\\.ext 的默认值）。
+
+    硬校验四项，任一不满足抛 ValueError：
+    1. 视图必须是用户级；
+    2. source 必须精确等于 HKCU\\Software\\Classes\\<extension>；
+    3. 状态必须是失效（invalid）；
+    4. 必须有 ProgID（有默认值可删）。
+    只删扩展名键的默认值，不碰 ProgID 键树；删除前备份。
+    """
+    if record.view != RegistryView.USER:
+        raise ValueError(f"只允许清理用户级关联定义: {record.view}")
+    expected_source = rf"HKCU\Software\Classes\{record.extension}"
+    if record.source != expected_source:
+        raise ValueError(f"来源不是用户级关联定义: {record.source}")
+    if record.status != Status.INVALID:
+        raise ValueError(f"只允许清理失效的关联定义: {record.status}")
+    if not record.prog_id:
+        raise ValueError("该扩展名没有默认值，无需清理")
+
+    default = reg.read_default(ViewKey.USER_CLASSES, record.extension)
+    if not default:
+        return None
+    operation = backup.record_removal(
+        ViewKey.USER_CLASSES, record.extension, None, default, record.extension
+    )
+    reg.delete_value(ViewKey.USER_CLASSES, record.extension, None)
     return operation

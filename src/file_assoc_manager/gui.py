@@ -10,7 +10,12 @@ from tkinter import filedialog, messagebox, ttk
 
 from . import i18n
 from .backup import BackupManager, Operation
-from .cleaner import remove_open_with_entry, remove_open_with_progid
+from .cleaner import (
+    progid_has_extras,
+    remove_open_with_entry,
+    remove_open_with_progid,
+    remove_user_class_definition,
+)
 from .i18n import LANGUAGES, get_language, set_language, t, translate_reason
 from .managed_progid import ProgIdManager
 from .models import Association, RegistryView, Status
@@ -109,10 +114,16 @@ COMMON_FORMAT_GROUPS: dict[str, list[tuple[str, str]]] = {
 
 
 def can_clean(record: Association) -> bool:
-    """记录是否属于可清理的来源（FileExts 的 OpenWithList / OpenWithProgids）。"""
-    return bool(
-        ("\\OpenWithList" in record.source and record.command)
-        or ("\\OpenWithProgids" in record.source and record.prog_id)
+    """记录是否可清理：打开方式残留（两类）或用户级失效关联定义。"""
+    if "\\OpenWithList" in record.source and record.command:
+        return True
+    if "\\OpenWithProgids" in record.source and record.prog_id:
+        return True
+    return (
+        record.view == RegistryView.USER
+        and record.source.startswith(r"HKCU\Software\Classes\.")
+        and record.status == Status.INVALID
+        and bool(record.prog_id)
     )
 
 
@@ -366,8 +377,8 @@ class FileAssocManagerApp(tk.Tk):
         hint = ttk.Label(bottom)
         self._register_label(
             hint,
-            "Only 'Open With' leftovers can be cleaned; system definitions "
-            "and UserChoice are read-only.",
+            "Open with leftovers and invalid user definitions can be cleaned; "
+            "system definitions and UserChoice are read-only.",
         )
         hint.pack(side="left", padx=10)
         return page
@@ -590,6 +601,8 @@ class FileAssocManagerApp(tk.Tk):
             return remove_open_with_progid(
                 self.reg, self.backup, record.extension, record.prog_id
             )
+        if can_clean(record):
+            return remove_user_class_definition(self.reg, self.backup, record)
         return None
 
     def _clean_selected(self):
@@ -602,20 +615,45 @@ class FileAssocManagerApp(tk.Tk):
         skipped = len(targets) - len(cleanable)
         if not cleanable:
             messagebox.showinfo(
-                t("None of the checked items can be cleaned (only 'Open With' leftovers)."),
+                t("None of the checked items can be cleaned."),
                 "",
             )
             return
-        if not messagebox.askyesno(
-            t("Confirm Cleanup"),
+        lines = [
             t(
-                "Will clean {clean} item(s), skip {skip} item(s) that cannot be "
-                "cleaned.\nEach item is backed up before removal and can be "
-                "restored anytime.\n\nProceed?",
+                "Will clean {clean} item(s), skip {skip} item(s) that cannot "
+                "be cleaned.",
                 clean=len(cleanable),
                 skip=skipped,
-            ),
-            parent=self,
+            )
+        ]
+        leftover_count = sum(1 for r in cleanable if "\\OpenWith" in r.source)
+        if leftover_count:
+            lines.append(
+                "  " + t("Open with leftovers: {n} item(s).", n=leftover_count)
+            )
+        definition_count = len(cleanable) - leftover_count
+        if definition_count:
+            line = "  " + t("Invalid definitions: {n} item(s).", n=definition_count)
+            extras_count = sum(
+                1
+                for r in cleanable
+                if "\\OpenWith" not in r.source
+                and r.prog_id
+                and progid_has_extras(self.reg, r.prog_id)
+            )
+            if extras_count:
+                line += " " + t(
+                    "of which {n} include shell extensions that will stop "
+                    "working too.",
+                    n=extras_count,
+                )
+            lines.append(line)
+        lines.append(t("Each item is backed up before removal and can be restored anytime."))
+        lines.append("")
+        lines.append(t("Proceed?"))
+        if not messagebox.askyesno(
+            t("Confirm Cleanup"), "\n".join(lines), parent=self
         ):
             return
         failed = []

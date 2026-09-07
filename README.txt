@@ -1,4 +1,4 @@
-文件关联管家 v0.2.1
+文件关联管家 v0.3.0
 ===================
 
 一个 Windows 10/11 便携式文件关联查看与维护工具。无联网、无安装、
@@ -43,7 +43,7 @@ Windows Defender 添加信任：
 ----------
 发布包附带 SHA-256 校验和（.sha256 文件）。PowerShell 中执行：
 
-  Get-FileHash .\FileAssocManager-v0.2.1-win-x64.zip -Algorithm SHA256
+  Get-FileHash .\FileAssocManager-v0.3.0-win-x64.zip -Algorithm SHA256
 
 与 .sha256 文件中的值一致即说明下载完整未被篡改。
 

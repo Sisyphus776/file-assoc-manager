@@ -84,6 +84,39 @@ class TestCanClean:
         record = rec(source=r"HKCU\Software\Classes\.txt", prog_id="txtfile")
         assert not can_clean(record)
 
+    def test_invalid_user_definition_is_cleanable(self):
+        record = rec(
+            source=r"HKCU\Software\Classes\.apk",
+            prog_id="Androws.apk",
+            status=Status.INVALID,
+        )
+        assert can_clean(record)
+
+    def test_valid_user_definition_is_not_cleanable(self):
+        record = rec(
+            source=r"HKCU\Software\Classes\.txt",
+            prog_id="txtfile",
+            status=Status.VALID,
+        )
+        assert not can_clean(record)
+
+    def test_unknown_user_definition_is_not_cleanable(self):
+        record = rec(
+            source=r"HKCU\Software\Classes\.bin",
+            prog_id="binfile",
+            status=Status.UNKNOWN,
+        )
+        assert not can_clean(record)
+
+    def test_invalid_system_definition_is_not_cleanable(self):
+        record = rec(
+            source=r"HKCR\.apk",
+            prog_id="Androws.apk",
+            status=Status.INVALID,
+            view=RegistryView.SYSTEM_64,
+        )
+        assert not can_clean(record)
+
 
 class TestBuildAllExtensions:
     def test_dedup_case_insensitive_and_sorted(self):
