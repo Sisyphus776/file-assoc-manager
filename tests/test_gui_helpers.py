@@ -62,21 +62,54 @@ class TestSourceKind:
 
 
 class TestCanClean:
-    def test_open_with_list_is_cleanable(self):
+    def test_open_with_list_invalid_is_cleanable(self):
         record = rec(
-            source=r"HKCU\...\FileExts\.txt\OpenWithList", command="notepad.exe"
+            source=r"HKCU\...\FileExts\.txt\OpenWithList",
+            command="notepad.exe",
+            status=Status.INVALID,
         )
         assert can_clean(record)
 
-    def test_open_with_list_without_command_is_not(self):
-        record = rec(source=r"HKCU\...\FileExts\.txt\OpenWithList", command=None)
+    def test_open_with_list_unknown_is_not_cleanable(self):
+        """UNKNOWN 的打开方式条目（如 exefile）不可清理：删了系统也会重建。"""
+        record = rec(
+            source=r"HKCU\...\FileExts\.txt\OpenWithList",
+            command="notepad.exe",
+            status=Status.UNKNOWN,
+        )
         assert not can_clean(record)
 
-    def test_open_with_progids_is_cleanable(self):
+    def test_open_with_list_valid_is_not_cleanable(self):
         record = rec(
-            source=r"HKCU\...\FileExts\.txt\OpenWithProgids", prog_id="ghostprog"
+            source=r"HKCU\...\FileExts\.txt\OpenWithList",
+            command="notepad.exe",
+            status=Status.VALID,
+        )
+        assert not can_clean(record)
+
+    def test_open_with_list_without_command_is_not(self):
+        record = rec(
+            source=r"HKCU\...\FileExts\.txt\OpenWithList",
+            command=None,
+            status=Status.INVALID,
+        )
+        assert not can_clean(record)
+
+    def test_open_with_progids_invalid_is_cleanable(self):
+        record = rec(
+            source=r"HKCU\...\FileExts\.txt\OpenWithProgids",
+            prog_id="ghostprog",
+            status=Status.INVALID,
         )
         assert can_clean(record)
+
+    def test_open_with_progids_unknown_is_not_cleanable(self):
+        record = rec(
+            source=r"HKCU\...\FileExts\.txt\OpenWithProgids",
+            prog_id="exefile",
+            status=Status.UNKNOWN,
+        )
+        assert not can_clean(record)
 
     def test_user_choice_is_not_cleanable(self):
         record = rec(source=r"HKCU\...\FileExts\.txt\UserChoice", prog_id="txtfile")

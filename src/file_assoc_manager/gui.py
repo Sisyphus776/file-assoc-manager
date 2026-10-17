@@ -123,7 +123,13 @@ COMMON_FORMAT_GROUPS: dict[str, list[tuple[str, str]]] = {
 
 
 def can_clean(record: Association) -> bool:
-    """记录是否可清理：打开方式残留（两类）或用户级失效关联定义。"""
+    """记录是否可清理：失效的打开方式残留（两类）或用户级失效关联定义。
+
+    只有 INVALID 状态才可清理：VALID 的打开方式候选是正常条目，
+    UNKNOWN（如 exefile 等 shell 托管项）删了系统也会重建，属无意义操作。
+    """
+    if record.status != Status.INVALID:
+        return False
     if "\\OpenWithList" in record.source and record.command:
         return True
     if "\\OpenWithProgids" in record.source and record.prog_id:
@@ -131,7 +137,6 @@ def can_clean(record: Association) -> bool:
     return (
         record.view == RegistryView.USER
         and record.source.startswith(r"HKCU\Software\Classes\.")
-        and record.status == Status.INVALID
         and bool(record.prog_id)
     )
 
