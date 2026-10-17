@@ -24,6 +24,11 @@
 - 状态：`valid`、`invalid`、`unknown`；
 - 无法判断时的原因。
 
+解析命令字符串时有三类典型“不确定”场景不判为 `invalid`：
+1. `ProgID` 键本身已不存在——这是真残留，判 `invalid`；
+2. `ProgID` 键存在但无 `shell\open\command`（如 `DelegateExecute` 现代应用、或 shell 托管的 `exefile`）——判 `unknown`；
+3. 命令被安装器误写入 `reg query` 的文本前缀（如 `(Default)    REG_SZ    "D:\..."`）——先剥离前缀再解析。
+
 `OpenWithList` 中的值可能只是 `notepad.exe` 这样的文件名，必须通过 `Applications\\<exe>\\shell\\open\\command`、App Paths、PATH 等来源解析后再判断，不能直接对原始字符串调用文件存在检查。
 
 ## 4. 修改与恢复

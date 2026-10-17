@@ -46,6 +46,9 @@ class MockRegistryAdapter(RegistryAdapter):
         node = self._lookup(view, path)
         return node.default if node else None
 
+    def key_exists(self, view: ViewKey, path: str) -> bool:
+        return self._lookup(view, path) is not None
+
     def read_values_typed(self, view: ViewKey, path: str) -> dict[str, tuple[str, int]]:
         node = self._lookup(view, path)
         if node is None:

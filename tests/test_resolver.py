@@ -66,11 +66,54 @@ class TestOpenCommandResolution:
         resolve(record, reg)
         assert record.command == '"C:\\sys32\\app.exe"'
 
-    def test_missing_progid_becomes_unknown(self):
+    def test_missing_progid_becomes_invalid(self):
+        """ProgID 键在任一 Classes 视图都不存在：真残留，判 invalid。"""
         record = make_record(prog_id="noprogress")
         resolve(record, MockRegistryAdapter())
+        assert record.status == Status.INVALID
+        assert "does not exist" in record.reason
+        assert record.command is None
+
+    def test_progid_exists_without_command_is_unknown(self):
+        """ProgID 键存在但无 shell\\open\\command：无法判断，不是残留。"""
+        reg = MockRegistryAdapter(
+            {ViewKey.USER_CLASSES: mock_key(subkeys={"prog1": mock_key()})}
+        )
+        record = make_record(prog_id="prog1")
+        resolve(record, reg)
         assert record.status == Status.UNKNOWN
         assert record.command is None
+
+    def test_placeholder_only_command_is_unknown(self):
+        """`"%1" %*` 类 shell 托管命令没有可执行文件：unknown，不能误判 invalid。"""
+        reg = MockRegistryAdapter(
+            {ViewKey.USER_CLASSES: mock_key(subkeys=classes_tree("exefile", '"%1" %*'))}
+        )
+        record = make_record(prog_id="exefile")
+        resolve(record, reg)
+        assert record.target_path is None
+        assert record.status == Status.UNKNOWN
+
+    def test_reg_query_prefix_is_stripped(self):
+        """安装器误写入的 reg query 输出前缀（(Default)  REG_SZ）应剥离后解析。"""
+        polluted = '(Default)    REG_SZ    "D:\\Apps\\7zFM.exe" "%1"'
+        reg = MockRegistryAdapter(
+            {ViewKey.USER_CLASSES: mock_key(subkeys=classes_tree("7zip.xz", polluted))}
+        )
+        record = make_record(prog_id="7zip.xz")
+        resolve(record, reg)
+        assert record.target_path == "D:\\Apps\\7zFM.exe"
+        assert record.status == Status.INVALID  # 路径不存在，但提取正确
+
+    def test_unquoted_placeholder_only_is_unknown(self):
+        """无引号的纯占位符命令（%1 %*）同样不是程序路径。"""
+        reg = MockRegistryAdapter(
+            {ViewKey.USER_CLASSES: mock_key(subkeys=classes_tree("p", "%1 %*"))}
+        )
+        record = make_record(prog_id="p")
+        resolve(record, reg)
+        assert record.target_path is None
+        assert record.status == Status.UNKNOWN
 
 
 class TestExtractProgramPath:

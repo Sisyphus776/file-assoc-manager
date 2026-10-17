@@ -104,6 +104,24 @@ class TestClasses:
         assert len(records) == 1
         assert records[0].prog_id is None
 
+    def test_system_view_without_default_is_skipped(self):
+        """系统视图中无默认值的扩展名键只是注册占位，不产生记录。"""
+        reg = MockRegistryAdapter(
+            {
+                ViewKey.SYSTEM_CLASSES_64: mock_key(subkeys={".xyz": mock_key()}),
+                ViewKey.SYSTEM_CLASSES_32: mock_key(subkeys={".xyz": mock_key()}),
+            }
+        )
+        assert scan(reg) == []
+
+    def test_user_view_without_default_is_kept(self):
+        """用户级无默认值仍保留（可能是问题迹象）。"""
+        reg = MockRegistryAdapter(
+            {ViewKey.USER_CLASSES: mock_key(subkeys={".xyz": mock_key()})}
+        )
+        records = scan(reg)
+        assert len(records) == 1
+
 
 class TestWow64DualView:
     def test_same_extension_in_both_views_yields_two_records(self):

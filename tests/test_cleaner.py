@@ -53,6 +53,32 @@ class TestRemoveOpenWithEntry:
         # 备份先行：目标值 + MRUList 各一条
         assert len(backup.list_operations()) == 2
 
+    def test_mru_list_removes_all_occurrences(self, tmp_path):
+        """脏 MRUList（如 "aba"）中删除的字母要全部剔除，不留悬挂引用。"""
+        reg = MockRegistryAdapter(
+            {
+                ViewKey.USER_FILE_EXTS: mock_key(
+                    subkeys={
+                        ".txt": mock_key(
+                            subkeys={
+                                "OpenWithList": mock_key(
+                                    values={
+                                        "a": "notepad.exe",
+                                        "b": "oldapp.exe",
+                                        "MRUList": "aba",
+                                    }
+                                )
+                            }
+                        )
+                    }
+                )
+            }
+        )
+        backup = BackupManager(data_dir=tmp_path)
+        remove_open_with_entry(reg, backup, ".txt", "oldapp.exe")
+        values = reg.read_values(ViewKey.USER_FILE_EXTS, ".txt\\OpenWithList")
+        assert values["MRUList"] == "aa"
+
     def test_mru_list_absent_is_tolerated(self, tmp_path):
         """OpenWithList 里没有 MRUList 时，删除照常进行且不报错。"""
         reg = MockRegistryAdapter(

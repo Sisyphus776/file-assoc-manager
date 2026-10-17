@@ -80,7 +80,11 @@ class RegistryAdapter(ABC):
 
     @abstractmethod
     def read_default(self, view: ViewKey, path: str) -> str | None:
-        """返回键的默认值；键不存在或默认值为空时返回 None。"""
+        """读键默认值。键不存在或无默认值时返回 None。"""
+
+    @abstractmethod
+    def key_exists(self, view: ViewKey, path: str) -> bool:
+        """键是否存在（与有无默认值无关）。"""
 
     @abstractmethod
     def read_values_typed(self, view: ViewKey, path: str) -> dict[str, tuple[str, int]]:
@@ -212,6 +216,9 @@ class WinRegAdapter(RegistryAdapter):
             if value is None:
                 return None
             return str(value)
+
+    def key_exists(self, view: ViewKey, path: str) -> bool:
+        return self._open(view, path) is not None
 
     def read_values_typed(self, view: ViewKey, path: str) -> dict[str, tuple[str, int]]:
         key = self._open(view, path)

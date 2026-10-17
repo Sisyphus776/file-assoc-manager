@@ -52,7 +52,7 @@ def _sync_mru_list(
     if entry is None:
         return
     mru_old, mru_type = entry
-    mru_new = mru_old.replace(removed_letter, "", 1)
+    mru_new = mru_old.replace(removed_letter, "")
     if mru_new == mru_old:
         return
     backup.record_removal(view, path, "MRUList", mru_old, extension, mru_type)

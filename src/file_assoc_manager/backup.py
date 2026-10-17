@@ -111,7 +111,12 @@ class BackupManager:
             raw = json.loads(self.log_path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError):
             return []
-        result = [Operation(**entry) for entry in raw]
+        result = [
+            Operation(
+                **{k: v for k, v in entry.items() if k in Operation.__dataclass_fields__}
+            )
+            for entry in raw
+        ]
         result.reverse()
         return result
 
@@ -134,9 +139,12 @@ class BackupManager:
                 existing = []
         self.data_dir.mkdir(parents=True, exist_ok=True)
         existing.append(asdict(operation))
-        self.log_path.write_text(
+        # 原子写：先写临时文件再替换，避免中途崩溃留下半个 JSON
+        tmp_path = self.log_path.with_suffix(".tmp")
+        tmp_path.write_text(
             json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8"
         )
+        tmp_path.replace(self.log_path)
 
 
 def _escape_reg_string(text: str) -> str:

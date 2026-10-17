@@ -81,6 +81,75 @@ class TestRegister:
         assert records[0].previous_default == "txtfile"
 
 
+class TestMultipleExtensions:
+    """同一程序挂多个扩展名：各一条记录，各存各的原默认值。"""
+
+    def test_two_extensions_two_records(self, tmp_path):
+        reg, manager = make_manager(tmp_path)
+        exe = make_exe(tmp_path, "player.exe")
+        manager.register(".aaa", exe)
+        manager.register(".bbb", exe)
+        records = manager.list_managed()
+        assert len(records) == 2
+        assert {r.extension for r in records} == {".aaa", ".bbb"}
+        assert all(r.prog_id == "FAM.player" for r in records)
+
+    def test_unregister_one_keeps_key_tree(self, tmp_path):
+        """撤掉一个扩展名后键树必须保留（另一个扩展名还在用）。"""
+        reg, manager = make_manager(tmp_path)
+        exe = make_exe(tmp_path, "player.exe")
+        m_aaa = manager.register(".aaa", exe)
+        manager.register(".bbb", exe)
+
+        manager.unregister(m_aaa.prog_id, ".aaa")
+        assert reg.read_default(ViewKey.USER_CLASSES, ".aaa") is None
+        assert reg.read_default(ViewKey.USER_CLASSES, ".bbb") == "FAM.player"
+        # 键树仍在
+        assert (
+            reg.read_default(
+                ViewKey.USER_CLASSES, "FAM.player\\shell\\open\\command"
+            )
+            is not None
+        )
+        assert [r.extension for r in manager.list_managed()] == [".bbb"]
+
+    def test_unregister_last_removes_key_tree(self, tmp_path):
+        reg, manager = make_manager(tmp_path)
+        exe = make_exe(tmp_path, "player.exe")
+        m = manager.register(".aaa", exe)
+        manager.register(".bbb", exe)
+
+        manager.unregister(m.prog_id, ".aaa")
+        manager.unregister(m.prog_id, ".bbb")
+        assert reg.list_subkeys(ViewKey.USER_CLASSES, "FAM.player") == []
+        assert manager.list_managed() == []
+
+
+class TestExtensionValidation:
+    def test_dotdot_rejected(self, tmp_path):
+        _, manager = make_manager(tmp_path)
+        exe = make_exe(tmp_path)
+        with pytest.raises(ValueError):
+            manager.register("..", exe)
+
+    def test_path_separator_rejected(self, tmp_path):
+        _, manager = make_manager(tmp_path)
+        exe = make_exe(tmp_path)
+        with pytest.raises(ValueError):
+            manager.register(r"a\b", exe)
+
+    def test_empty_rejected(self, tmp_path):
+        _, manager = make_manager(tmp_path)
+        exe = make_exe(tmp_path)
+        with pytest.raises(ValueError):
+            manager.register("", exe)
+
+    def test_compound_extension_allowed(self, tmp_path):
+        _, manager = make_manager(tmp_path)
+        exe = make_exe(tmp_path)
+        assert manager.register(".tar.gz", exe).extension == ".tar.gz"
+
+
 class TestUnregister:
     def test_restores_previous_default_and_removes_key(self, tmp_path):
         reg, manager = make_manager(tmp_path)

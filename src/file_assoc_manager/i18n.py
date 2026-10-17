@@ -93,6 +93,7 @@ ZH_TABLE: dict[str, str] = {
     ),
     "Open with leftovers: {n} item(s).": "打开方式残留：{n} 条",
     "Invalid definitions: {n} item(s).": "失效关联定义：{n} 条",
+    "... and {n} more item(s).": "……另有 {n} 条",
     "of which {n} include shell extensions that will stop working too.": (
         "其中 {n} 条包含右键菜单/预览等扩展功能，清理后一并失效"
     ),

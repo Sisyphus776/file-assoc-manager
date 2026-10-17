@@ -103,12 +103,16 @@ def _scan_classes(reg: RegistryAdapter, view: ViewKey) -> list[Association]:
     for subkey in reg.list_subkeys(view, ""):
         if not subkey.startswith("."):
             continue
+        prog_id = reg.read_default(view, subkey)
+        if prog_id is None and view is not ViewKey.USER_CLASSES:
+            # 系统视图中无默认值的扩展名键只是注册占位，无信息量，跳过
+            continue
         records.append(
             Association(
                 extension=subkey,
                 source=f"{prefix}\\{subkey}",
                 view=_VIEW_MAP[view],
-                prog_id=reg.read_default(view, subkey),
+                prog_id=prog_id,
                 command=None,
                 target_path=None,
                 status=Status.UNKNOWN,

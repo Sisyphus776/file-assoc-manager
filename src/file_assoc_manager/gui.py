@@ -44,12 +44,6 @@ _STATUS_LABELS = {
     Status.UNKNOWN: "Unknown",
 }
 
-_VIEW_LABELS = {
-    RegistryView.USER: "User level",
-    RegistryView.SYSTEM_64: "System 64-bit",
-    RegistryView.SYSTEM_32: "System 32-bit",
-}
-
 
 def source_kind(record: Association) -> str:
     """记录来源类型（i18n key）：只有 Open with 两类可清理。"""
@@ -276,18 +270,19 @@ class FormatPickerDialog(tk.Toplevel):
 class FileAssocManagerApp(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title(t("File Association Manager"))
-        self.geometry("1150x680")
-
         self.reg = WinRegAdapter()
         self.backup = BackupManager()
         self.config_path = self.backup.data_dir / "config.json"
         set_language(i18n.load_language(self.config_path))
+        self.title(t("File Association Manager"))
+        self.geometry("1150x680")
 
         self.progid_mgr = ProgIdManager(self.reg, self.backup)
         self.records: list[Association] = []
         self._scan_thread: threading.Thread | None = None
         self._check_state: dict[ttk.Treeview, set[str]] = {}
+        # 当前筛选的 key（"All"/"Invalid"/...），语言切换时据此恢复
+        self._filter_key = "All"
         # 语言切换时需重设文案的控件与表头
         self._i18n_labels: list[tuple[ttk.Widget, str, dict]] = []
         self._trees: list[tuple[ttk.Treeview, tuple[str, ...]]] = []
@@ -341,11 +336,11 @@ class FileAssocManagerApp(tk.Tk):
             columns = tree["columns"][1:]  # 跳过勾选列
             for col, key in zip(columns, header_keys):
                 tree.heading(col, text=t(key))
-        # 筛选下拉的选项与当前值
+        # 筛选下拉的选项与当前值（保留用户已选的筛选，不重置为 All）
         self.filter_box.configure(
             values=(t("All"), t("Invalid"), t("Unknown"), t("Valid"))
         )
-        self.filter_var.set(t("All"))
+        self.filter_var.set(t(self._filter_key))
         self._populate_scan()
         self._populate_backup()
         self._populate_managed()
@@ -372,7 +367,7 @@ class FileAssocManagerApp(tk.Tk):
             width=12,
         )
         self.filter_box.pack(side="left", padx=(0, 8))
-        self.filter_box.bind("<<ComboboxSelected>>", lambda _e: self._populate_scan())
+        self.filter_box.bind("<<ComboboxSelected>>", self._on_filter_change)
         refresh = ttk.Button(toolbar, command=self._start_scan)
         self._register_label(refresh, "Rescan")
         refresh.pack(side="left")
@@ -582,16 +577,25 @@ class FileAssocManagerApp(tk.Tk):
         self.scan_status.configure(text=t("Scan failed"))
         messagebox.showerror(t("Scan failed"), str(exc))
 
+    def _prune_checks(self, tree):
+        """勾选集与当前可见行取交集：行重建/筛选后隐藏行的勾选不再生效。"""
+        self._check_state[tree] &= set(tree.get_children())
+
+    def _on_filter_change(self, _event=None):
+        """筛选下拉切换：记住英文 key，语言切换时据此恢复。"""
+        key_map = {t(k): k for k in ("All", "Invalid", "Unknown", "Valid")}
+        self._filter_key = key_map.get(self.filter_var.get(), "All")
+        self._populate_scan()
+
     def _populate_scan(self):
         self.scan_tree.delete(*self.scan_tree.get_children())
-        selected = self.filter_var.get()
-        labels = (
-            (t("All"), None),
-            (t("Invalid"), Status.INVALID),
-            (t("Unknown"), Status.UNKNOWN),
-            (t("Valid"), Status.VALID),
-        )
-        want_status = next((s for label, s in labels if label == selected), None)
+        status_map = {
+            "All": None,
+            "Invalid": Status.INVALID,
+            "Unknown": Status.UNKNOWN,
+            "Valid": Status.VALID,
+        }
+        want_status = status_map.get(self._filter_key)
         for index, record in enumerate(self.records):
             if want_status is not None and record.status != want_status:
                 continue
@@ -609,6 +613,7 @@ class FileAssocManagerApp(tk.Tk):
                     translate_reason(record.reason or ""),
                 ),
             )
+        self._prune_checks(self.scan_tree)
         self._refresh_checks(self.scan_tree)
 
     def _clean_record(self, record: Association) -> Operation | None:
@@ -669,6 +674,19 @@ class FileAssocManagerApp(tk.Tk):
                     n=extras_count,
                 )
             lines.append(line)
+        # 明细：每条列出扩展名、键位置与目标，超 10 条截断（design.md 第 7 节）
+        detail_limit = 10
+        for r in cleanable[:detail_limit]:
+            detail = f"  {r.extension}  |  {r.source}"
+            if r.target_path:
+                detail += f"  |  {r.target_path}"
+            elif r.prog_id:
+                detail += f"  |  {r.prog_id}"
+            lines.append(detail)
+        if len(cleanable) > detail_limit:
+            lines.append(
+                "  " + t("... and {n} more item(s).", n=len(cleanable) - detail_limit)
+            )
         lines.append(t("Each item is backed up before removal and can be restored anytime."))
         lines.append("")
         lines.append(t("Proceed?"))
@@ -698,11 +716,12 @@ class FileAssocManagerApp(tk.Tk):
 
     def _populate_backup(self):
         self.backup_tree.delete(*self.backup_tree.get_children())
-        for index, operation in enumerate(self.backup.list_operations()):
+        for operation in self.backup.list_operations():
+            # iid 用时间戳（稳定键）：列表重建后勾选仍指向同一条记录
             self.backup_tree.insert(
                 "",
                 "end",
-                iid=str(index),
+                iid=operation.timestamp,
                 values=(
                     "",
                     operation.timestamp,
@@ -712,15 +731,16 @@ class FileAssocManagerApp(tk.Tk):
                     operation.value_data,
                 ),
             )
+        self._prune_checks(self.backup_tree)
         self._refresh_checks(self.backup_tree)
 
     def _restore_selected(self):
-        operations = self.backup.list_operations()
+        ops_by_ts = {op.timestamp: op for op in self.backup.list_operations()}
         checked_ids = self._check_state[self.backup_tree]
-        if not checked_ids:
+        selected = [ops_by_ts[i] for i in checked_ids if i in ops_by_ts]
+        if not selected:
             messagebox.showinfo(t("Please check the operation records to restore first."), "")
             return
-        selected = [operations[int(i)] for i in checked_ids]
         if not messagebox.askyesno(
             t("Confirm Restore"),
             t(
@@ -742,6 +762,7 @@ class FileAssocManagerApp(tk.Tk):
         messagebox.showinfo(
             t("Restore complete"), t("Restored {count} item(s).", count=len(selected))
         )
+        self._populate_backup()
         _notify_shell_assoc_changed()
         self._start_scan()
 
@@ -788,11 +809,12 @@ class FileAssocManagerApp(tk.Tk):
 
     def _populate_managed(self):
         self.managed_tree.delete(*self.managed_tree.get_children())
-        for index, managed in enumerate(self.progid_mgr.list_managed()):
+        for managed in self.progid_mgr.list_managed():
+            # iid 用 prog_id|extension（稳定键）：列表重建后勾选仍指向同一条
             self.managed_tree.insert(
                 "",
                 "end",
-                iid=str(index),
+                iid=f"{managed.prog_id}|{managed.extension}",
                 values=(
                     "",
                     managed.prog_id,
@@ -801,15 +823,18 @@ class FileAssocManagerApp(tk.Tk):
                     managed.previous_default or t("(none)"),
                 ),
             )
+        self._prune_checks(self.managed_tree)
         self._refresh_checks(self.managed_tree)
 
     def _unregister_selected(self):
-        managed = self.progid_mgr.list_managed()
+        entries = {
+            f"{m.prog_id}|{m.extension}": m for m in self.progid_mgr.list_managed()
+        }
         checked_ids = self._check_state[self.managed_tree]
-        if not checked_ids:
+        selected = [entries[i] for i in checked_ids if i in entries]
+        if not selected:
             messagebox.showinfo(t("Please check the associations to unregister first."), "")
             return
-        selected = [managed[int(i)] for i in checked_ids]
         if not messagebox.askyesno(
             t("Confirm Unregister"),
             t(
@@ -822,10 +847,12 @@ class FileAssocManagerApp(tk.Tk):
             return
         for entry in selected:
             try:
-                self.progid_mgr.unregister(entry.prog_id)
+                self.progid_mgr.unregister(entry.prog_id, entry.extension)
             except Exception as exc:
                 messagebox.showerror(
-                    t("Unregister failed"), f"{entry.prog_id}: {exc}", parent=self
+                    t("Unregister failed"),
+                    f"{entry.prog_id} ({entry.extension}): {exc}",
+                    parent=self,
                 )
                 return
         messagebox.showinfo(

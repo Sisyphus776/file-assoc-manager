@@ -7,15 +7,20 @@
 # - 无管理员提权清单（工具只写 HKCU，不需要管理员）
 # - 无控制台窗口
 
+import os
+import sys
+
+# venv 没有 Anaconda 的 Library 目录，PyInstaller 会顺 PATH 找到
+# base 环境的 tcl86t.dll（8.6.15），与当前 Python 的 tkinter 版本
+# 可能不匹配，打包结果启动即崩。这里从运行构建的解释器动态定位。
+_tcl_bin = os.path.join(sys.base_prefix, "Library", "bin")
+
 a = Analysis(
     ["run_app.py"],
     pathex=["src"],
-    # venv 没有 Anaconda 的 Library 目录，PyInstaller 会顺 PATH 找到
-    # base 环境的 tcl86t.dll（8.6.15），与 py313 的 tkinter（8.6.13）
-    # 不匹配，打包结果启动即崩。这里显式指定 py313 的 DLL。
     binaries=[
-        (r"D:\Anaconda\envs\py313\Library\bin\tcl86t.dll", "."),
-        (r"D:\Anaconda\envs\py313\Library\bin\tk86t.dll", "."),
+        (os.path.join(_tcl_bin, "tcl86t.dll"), "."),
+        (os.path.join(_tcl_bin, "tk86t.dll"), "."),
     ],
     datas=[],
     hiddenimports=[],

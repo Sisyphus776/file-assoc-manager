@@ -18,6 +18,19 @@ from .registry import RegistryAdapter, ViewKey
 
 PROGID_PREFIX = "FAM."
 
+# 扩展名合法形态：.aaa / .tar.gz 等；不允许路径分隔符与 ".."
+_EXT_RE = re.compile(r"^\.[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+
+def _validate_extension(extension: str) -> str:
+    """规范化并校验扩展名，返回带点小写形式；非法时抛 ValueError。"""
+    ext = extension.strip().lower()
+    if not ext.startswith("."):
+        ext = "." + ext
+    if not _EXT_RE.match(ext) or ".." in ext:
+        raise ValueError(f"非法扩展名: {extension!r}（应形如 .aaa）")
+    return ext
+
 
 @dataclass
 class ManagedProgId:
@@ -34,17 +47,21 @@ class ProgIdManager:
         self.managed_path = Path(backup.data_dir) / "managed.json"
 
     def register(self, extension: str, program_path: str) -> ManagedProgId:
-        """注册便携程序的关联；重复注册同一程序时保留最初的原默认值。
+        """注册便携程序的关联；重复注册同一扩展名时保留最初的原默认值。
 
+        同一程序可挂多个扩展名（各一条台账记录，各存各的 previous_default）。
         program_path 必须是实际存在的可执行文件路径，否则抛出 ValueError。
         """
         if not os.path.isfile(program_path):
             raise ValueError(f"程序路径不存在: {program_path}")
-        ext = extension if extension.startswith(".") else f".{extension}"
+        ext = _validate_extension(extension)
         prog_id = PROGID_PREFIX + _sanitize_stem(program_path)
         records = _load(self.managed_path)
 
-        existing = next((r for r in records if r.prog_id == prog_id), None)
+        existing = next(
+            (r for r in records if r.prog_id == prog_id and r.extension == ext),
+            None,
+        )
         if existing is not None:
             previous = existing.previous_default
             records.remove(existing)
@@ -71,28 +88,24 @@ class ProgIdManager:
     def list_managed(self) -> list[ManagedProgId]:
         return _load(self.managed_path)
 
-    def unregister(self, prog_id: str) -> None:
-        """撤销本工具创建的关联：恢复扩展名原默认值并删除 ProgID 键。
+    def unregister(self, prog_id: str, extension: str | None = None) -> None:
+        """撤销本工具创建的关联：恢复扩展名原默认值。
 
-        删除前先备份 command 值与当前扩展名默认值，确保可恢复。
+        同一 ProgID 挂了多个扩展名时，只移除 extension 指定的那条记录；
+        最后一个扩展名移除后才备份 command 值并删除 ProgID 键树。
         """
         records = _load(self.managed_path)
-        match = next((r for r in records if r.prog_id == prog_id), None)
+        match = next(
+            (
+                r
+                for r in records
+                if r.prog_id == prog_id
+                and (extension is None or r.extension == extension)
+            ),
+            None,
+        )
         if match is None:
             raise ValueError(f"不是本工具管理的 ProgID: {prog_id}")
-
-        # 备份 command 值（ProgID 键树的核心）
-        cmd = self.reg.read_default(
-            ViewKey.USER_CLASSES, f"{match.prog_id}\\shell\\open\\command"
-        )
-        if cmd is not None:
-            self.backup.record_removal(
-                ViewKey.USER_CLASSES,
-                f"{match.prog_id}\\shell\\open\\command",
-                None,
-                cmd,
-                match.extension,
-            )
 
         # 备份当前扩展名默认值（将被恢复或删除）
         current_default = self.reg.read_default(ViewKey.USER_CLASSES, match.extension)
@@ -115,8 +128,23 @@ class ProgIdManager:
         else:
             self.reg.delete_value(ViewKey.USER_CLASSES, match.extension, None)
 
-        _delete_key_tree(self.reg, ViewKey.USER_CLASSES, match.prog_id)
-        _save(self.managed_path, [r for r in records if r.prog_id != prog_id])
+        records.remove(match)
+        if not any(r.prog_id == prog_id for r in records):
+            # 最后一个扩展名：备份 command 值后递归删除键树
+            cmd = self.reg.read_default(
+                ViewKey.USER_CLASSES, f"{match.prog_id}\\shell\\open\\command"
+            )
+            if cmd is not None:
+                self.backup.record_removal(
+                    ViewKey.USER_CLASSES,
+                    f"{match.prog_id}\\shell\\open\\command",
+                    None,
+                    cmd,
+                    match.extension,
+                )
+            _delete_key_tree(self.reg, ViewKey.USER_CLASSES, match.prog_id)
+
+        _save(self.managed_path, records)
 
 
 def _sanitize_stem(program_path: str) -> str:
@@ -138,12 +166,16 @@ def _load(path: Path) -> list[ManagedProgId]:
         raw = json.loads(path.read_text(encoding="utf-8"))
     except (json.JSONDecodeError, OSError):
         return []
-    return [ManagedProgId(**entry) for entry in raw]
+    fields = ManagedProgId.__dataclass_fields__
+    return [ManagedProgId(**{k: v for k, v in e.items() if k in fields}) for e in raw]
 
 
 def _save(path: Path, records: list[ManagedProgId]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
+    # 原子写：先写临时文件再替换，避免中途崩溃留下半个 JSON
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(
         json.dumps([asdict(r) for r in records], ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    tmp.replace(path)
