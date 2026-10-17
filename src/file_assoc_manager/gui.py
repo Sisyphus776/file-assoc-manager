@@ -175,6 +175,22 @@ def build_all_extensions(records: list[Association]) -> list[str]:
     return sorted(result, key=str.lower)
 
 
+def backup_iid_map(operations: list) -> dict[str, object]:
+    """生成备份页 Treeview 的稳定 iid 映射。
+
+    timestamp 是毫秒精度，同毫秒双操作会重复；重复时追加 #1/#2 序号。
+    """
+    seen: dict[str, int] = {}
+    result: dict[str, object] = {}
+    for operation in operations:
+        base = operation.timestamp
+        n = seen.get(base, 0)
+        seen[base] = n + 1
+        key = base if n == 0 else f"{base}#{n}"
+        result[key] = operation
+    return result
+
+
 class FormatPickerDialog(tk.Toplevel):
     """格式选择弹窗：常见类型置顶 + 全部扩展名，支持搜索与当前默认提示。"""
 
@@ -716,12 +732,13 @@ class FileAssocManagerApp(tk.Tk):
 
     def _populate_backup(self):
         self.backup_tree.delete(*self.backup_tree.get_children())
-        for operation in self.backup.list_operations():
-            # iid 用时间戳（稳定键）：列表重建后勾选仍指向同一条记录
+        # iid 用稳定键（时间戳去重）：列表重建后勾选仍指向同一条记录
+        self._backup_map = backup_iid_map(self.backup.list_operations())
+        for iid, operation in self._backup_map.items():
             self.backup_tree.insert(
                 "",
                 "end",
-                iid=operation.timestamp,
+                iid=iid,
                 values=(
                     "",
                     operation.timestamp,
@@ -735,9 +752,8 @@ class FileAssocManagerApp(tk.Tk):
         self._refresh_checks(self.backup_tree)
 
     def _restore_selected(self):
-        ops_by_ts = {op.timestamp: op for op in self.backup.list_operations()}
         checked_ids = self._check_state[self.backup_tree]
-        selected = [ops_by_ts[i] for i in checked_ids if i in ops_by_ts]
+        selected = [self._backup_map[i] for i in checked_ids if i in self._backup_map]
         if not selected:
             messagebox.showinfo(t("Please check the operation records to restore first."), "")
             return

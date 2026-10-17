@@ -134,6 +134,8 @@ ZH_TABLE: dict[str, str] = {
         "由系统组件处理（DelegateExecute），无法按文件路径判断"
     ),
     "UWP app, cannot check file path.": "UWP 应用，无法按文件路径判断",
+    "ProgID has no open command.": "该 ProgID 没有打开命令",
+    "ProgID key does not exist: ": "ProgID 键不存在: ",
     # 格式分组与常见格式名（选择器用）
     "Documents": "文档",
     "Images": "图片",
@@ -191,6 +193,7 @@ ZH_TABLE: dict[str, str] = {
 _REASON_PREFIXES_ZH = {
     "Program file not found: ": "程序文件不存在: ",
     "Program not found or not in PATH: ": "程序不存在或不在 PATH 中: ",
+    "ProgID key does not exist: ": "ProgID 键不存在: ",
 }
 
 _current_language = DEFAULT_LANGUAGE

@@ -1,6 +1,8 @@
 """GUI 中可测的纯逻辑：清理资格判断、扩展名选项构建、当前默认查询。"""
 
+from file_assoc_manager.backup import Operation
 from file_assoc_manager.gui import (
+    backup_iid_map,
     build_all_extensions,
     can_clean,
     current_default_of,
@@ -157,3 +159,41 @@ class TestCurrentDefault:
                 target_path=r"C:\Windows\notepad.exe"),
         ]
         assert current_default_of(records, ".txt") == r"C:\Windows\notepad.exe"
+
+
+class TestBackupIidMap:
+    """同毫秒双操作的 timestamp 会重复，iid 必须去重。"""
+
+    def _op(self, timestamp, key_path=".txt"):
+        return Operation(
+            timestamp=timestamp,
+            action="remove",
+            extension=".txt",
+            view="HKCU\\Software\\Classes",
+            key_path=key_path,
+            value_name=None,
+            value_data="x",
+            backup_file="",
+        )
+
+    def test_unique_timestamps_pass_through(self):
+        ops = [self._op("20261017_180000_001"), self._op("20261017_180000_002")]
+        result = backup_iid_map(ops)
+        assert list(result) == ["20261017_180000_001", "20261017_180000_002"]
+
+    def test_duplicate_timestamp_gets_suffix(self):
+        ops = [self._op("20261017_180000_001"), self._op("20261017_180000_001")]
+        result = backup_iid_map(ops)
+        assert list(result) == ["20261017_180000_001", "20261017_180000_001#1"]
+
+    def test_triple_duplicate(self):
+        ops = [self._op("ts")] * 3
+        result = backup_iid_map(ops)
+        assert list(result) == ["ts", "ts#1", "ts#2"]
+
+    def test_iid_maps_to_correct_operation(self):
+        op1 = self._op("ts", key_path=".aaa")
+        op2 = self._op("ts", key_path=".bbb")
+        result = backup_iid_map([op1, op2])
+        assert result["ts"].key_path == ".aaa"
+        assert result["ts#1"].key_path == ".bbb"
