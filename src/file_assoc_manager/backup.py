@@ -7,6 +7,7 @@
 
 import json
 import os
+import sys
 import winreg
 from dataclasses import asdict, dataclass
 from datetime import datetime
@@ -25,9 +26,22 @@ _HIVE_PATHS: dict[ViewKey, str] = {
     ViewKey.USER_CLASSES: r"HKEY_CURRENT_USER\Software\Classes",
 }
 
+APP_DIR_NAME = "FileAssocManager"
+
+# 操作日志上限：超出时裁剪最老记录并删除对应 .reg 快照，防止无限膨胀
+MAX_OPERATIONS = 500
+
 
 def default_data_dir() -> Path:
-    """工具数据目录：%APPDATA%\\FileAssocManager（用户范围）。"""
+    """工具数据目录。
+
+    便携模式：打包后的 exe 同目录下若存在 data/ 文件夹则使用之；
+    否则用 %APPDATA%\\FileAssocManager（用户范围）。
+    """
+    if getattr(sys, "frozen", False):
+        portable = Path(sys.executable).parent / "data"
+        if portable.is_dir():
+            return portable
     appdata = os.environ.get("APPDATA")
     if appdata:
         return Path(appdata) / APP_DIR_NAME
@@ -139,6 +153,16 @@ class BackupManager:
                 existing = []
         self.data_dir.mkdir(parents=True, exist_ok=True)
         existing.append(asdict(operation))
+        # 日志上限：裁剪最老记录并删除对应 .reg 快照
+        if len(existing) > MAX_OPERATIONS:
+            for old in existing[: len(existing) - MAX_OPERATIONS]:
+                backup_file = old.get("backup_file")
+                if backup_file:
+                    try:
+                        os.remove(backup_file)
+                    except OSError:
+                        pass  # 快照已被手动删除等情况，忽略
+            existing = existing[-MAX_OPERATIONS:]
         # 原子写：先写临时文件再替换，避免中途崩溃留下半个 JSON
         tmp_path = self.log_path.with_suffix(".tmp")
         tmp_path.write_text(

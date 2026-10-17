@@ -151,3 +151,21 @@ class TestDataDir:
     def test_default_uses_appdata(self, monkeypatch, tmp_path):
         monkeypatch.setenv("APPDATA", str(tmp_path))
         assert str(BackupManager().data_dir) == str(tmp_path / "FileAssocManager")
+
+
+class TestLogLimit:
+    def test_log_trimmed_to_max_and_reg_files_removed(self, tmp_path, monkeypatch):
+        """日志超过上限时裁剪最老记录，对应 .reg 快照一并删除。"""
+        import file_assoc_manager.backup as backup_module
+
+        monkeypatch.setattr(backup_module, "MAX_OPERATIONS", 3)
+        manager = BackupManager(data_dir=tmp_path)
+        for i in range(5):
+            manager.record_removal(
+                ViewKey.USER_CLASSES, f".e{i}", None, "x", f".e{i}"
+            )
+        ops = manager.list_operations()
+        assert len(ops) == 3
+        assert {o.key_path for o in ops} == {".e2", ".e3", ".e4"}
+        # 被裁剪的两条 .reg 快照已删除，目录里只剩 3 个
+        assert len(list((tmp_path / "backups").glob("*.reg"))) == 3

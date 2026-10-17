@@ -124,6 +124,17 @@ class TestMultipleExtensions:
         assert reg.list_subkeys(ViewKey.USER_CLASSES, "FAM.player") == []
         assert manager.list_managed() == []
 
+    def test_unregister_skips_taken_over_default(self, tmp_path):
+        """撤销时扩展名已被其他程序接管：不动注册表，只删台账记录。"""
+        reg, manager = make_manager(tmp_path)
+        exe = make_exe(tmp_path, "player.exe")
+        m = manager.register(".aaa", exe)
+        # 模拟另一程序抢占了 .aaa 的默认关联
+        reg.set_value(ViewKey.USER_CLASSES, ".aaa", None, "OtherProg")
+        manager.unregister(m.prog_id, ".aaa")
+        assert reg.read_default(ViewKey.USER_CLASSES, ".aaa") == "OtherProg"
+        assert manager.list_managed() == []
+
 
 class TestExtensionValidation:
     def test_dotdot_rejected(self, tmp_path):

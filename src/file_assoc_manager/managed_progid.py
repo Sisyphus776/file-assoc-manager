@@ -118,15 +118,18 @@ class ProgIdManager:
                 match.extension,
             )
 
-        if match.previous_default is not None:
-            self.reg.set_value(
-                ViewKey.USER_CLASSES,
-                match.extension,
-                None,
-                match.previous_default,
-            )
-        else:
-            self.reg.delete_value(ViewKey.USER_CLASSES, match.extension, None)
+        # 当前默认值仍指向本 prog_id 才恢复/删除；
+        # 已被其他程序接管（如另一 exe 注册了同一扩展名）时不动注册表
+        if current_default is not None and current_default.lower() == prog_id.lower():
+            if match.previous_default is not None:
+                self.reg.set_value(
+                    ViewKey.USER_CLASSES,
+                    match.extension,
+                    None,
+                    match.previous_default,
+                )
+            else:
+                self.reg.delete_value(ViewKey.USER_CLASSES, match.extension, None)
 
         records.remove(match)
         if not any(r.prog_id == prog_id for r in records):

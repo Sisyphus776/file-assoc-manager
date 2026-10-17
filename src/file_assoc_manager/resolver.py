@@ -150,6 +150,9 @@ def _extract_program_path(command: str) -> str | None:
     for token in parts:
         if token.upper() in _PLACEHOLDER_TOKENS:
             break
+        if token.startswith(("-", "/")):
+            # 参数开关（如 -arg /x）：无扩展名程序的路径到此为止
+            break
         candidate = token if not candidate else candidate + " " + token
         if os.path.isfile(candidate):
             return candidate

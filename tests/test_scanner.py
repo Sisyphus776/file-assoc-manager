@@ -98,11 +98,12 @@ class TestClasses:
         assert records[0].prog_id == "txtfile"
         assert records[0].source == r"HKCU\Software\Classes\.txt"
 
-    def test_extension_without_default_value(self):
-        reg = MockRegistryAdapter({ViewKey.USER_CLASSES: mock_key(subkeys={".xyz": mock_key()})})
-        records = scan(reg)
-        assert len(records) == 1
-        assert records[0].prog_id is None
+    def test_extension_without_default_value_is_skipped(self):
+        """无默认值的扩展名键（空壳）不产生记录，用户级与系统级一致。"""
+        reg = MockRegistryAdapter(
+            {ViewKey.USER_CLASSES: mock_key(subkeys={".xyz": mock_key()})}
+        )
+        assert scan(reg) == []
 
     def test_system_view_without_default_is_skipped(self):
         """系统视图中无默认值的扩展名键只是注册占位，不产生记录。"""
@@ -113,14 +114,6 @@ class TestClasses:
             }
         )
         assert scan(reg) == []
-
-    def test_user_view_without_default_is_kept(self):
-        """用户级无默认值仍保留（可能是问题迹象）。"""
-        reg = MockRegistryAdapter(
-            {ViewKey.USER_CLASSES: mock_key(subkeys={".xyz": mock_key()})}
-        )
-        records = scan(reg)
-        assert len(records) == 1
 
 
 class TestWow64DualView:

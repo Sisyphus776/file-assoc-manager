@@ -115,6 +115,19 @@ class TestOpenCommandResolution:
         assert record.target_path is None
         assert record.status == Status.UNKNOWN
 
+    def test_extensionless_path_stops_at_switch(self):
+        """无扩展名程序带参数：路径到参数开关（-arg /x）为止，不吞参数。"""
+        reg = MockRegistryAdapter(
+            {
+                ViewKey.USER_CLASSES: mock_key(
+                    subkeys=classes_tree("p", "C:\\Tools\\myapp -arg")
+                )
+            }
+        )
+        record = make_record(prog_id="p")
+        resolve(record, reg)
+        assert record.target_path == "C:\\Tools\\myapp"
+
 
 class TestExtractProgramPath:
     def test_quoted_path_with_args(self):
