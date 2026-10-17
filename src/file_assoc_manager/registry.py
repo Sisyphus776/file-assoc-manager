@@ -34,14 +34,16 @@ _WINREG_VIEWS: dict[ViewKey, tuple[int, str, int]] = {
         0,
     ),
     ViewKey.USER_CLASSES: (winreg.HKEY_CURRENT_USER, r"Software\Classes", 0),
+    # 系统级视图必须显式用 HKLM\Software\Classes，不能用 HKCR：
+    # HKCR 是合并视图，会把 HKCU\Software\Classes 的内容混入"系统级"结果。
     ViewKey.SYSTEM_CLASSES_64: (
-        winreg.HKEY_CLASSES_ROOT,
-        "",
+        winreg.HKEY_LOCAL_MACHINE,
+        r"Software\Classes",
         winreg.KEY_WOW64_64KEY,
     ),
     ViewKey.SYSTEM_CLASSES_32: (
-        winreg.HKEY_CLASSES_ROOT,
-        "",
+        winreg.HKEY_LOCAL_MACHINE,
+        r"Software\Classes",
         winreg.KEY_WOW64_32KEY,
     ),
     ViewKey.SYSTEM_APP_PATHS_64: (
@@ -81,16 +83,35 @@ class RegistryAdapter(ABC):
         """返回键的默认值；键不存在或默认值为空时返回 None。"""
 
     @abstractmethod
-    def read_values(self, view: ViewKey, path: str) -> dict[str, str]:
-        """返回键的命名值（name -> str）；键不存在时返回空字典。
+    def read_values_typed(self, view: ViewKey, path: str) -> dict[str, tuple[str, int]]:
+        """返回键的命名值（name -> (str, winreg 类型)）；键不存在时返回空字典。
 
         仅保留 REG_SZ / REG_EXPAND_SZ / REG_DWORD / REG_NONE 类型的值，
         其他类型（如 REG_BINARY）忽略。
         """
 
+    def read_values(self, view: ViewKey, path: str) -> dict[str, str]:
+        """read_values_typed 的便捷形式，丢弃类型信息。"""
+        return {
+            name: value
+            for name, (value, _type) in self.read_values_typed(view, path).items()
+        }
+
     @abstractmethod
-    def set_value(self, view: ViewKey, path: str, name: str | None, value: str) -> None:
-        """写入 REG_SZ 值（name 为 None 表示默认值），中间键自动创建。"""
+    def set_value(
+        self,
+        view: ViewKey,
+        path: str,
+        name: str | None,
+        value: str,
+        value_type: int = winreg.REG_SZ,
+    ) -> None:
+        """写入值（name 为 None 表示默认值），中间键自动创建。
+
+        value_type 支持 REG_SZ / REG_EXPAND_SZ / REG_DWORD / REG_NONE；
+        value 一律以 str 传入，按类型转换（REG_DWORD 取 int(value)，
+        REG_NONE 转为 bytes）。
+        """
 
     @abstractmethod
     def delete_value(self, view: ViewKey, path: str, name: str | None) -> None:
@@ -122,11 +143,22 @@ class WinRegAdapter(RegistryAdapter):
         return winreg.CreateKey(hive, _join(base, path))
 
     def set_value(
-        self, view: ViewKey, path: str, name: str | None, value: str
+        self,
+        view: ViewKey,
+        path: str,
+        name: str | None,
+        value: str,
+        value_type: int = winreg.REG_SZ,
     ) -> None:
         key = self._create(view, path)
+        if value_type == winreg.REG_DWORD:
+            data: object = int(value)
+        elif value_type == winreg.REG_NONE:
+            data = value.encode("utf-8") if isinstance(value, str) else value
+        else:
+            data = value
         with key:
-            winreg.SetValueEx(key, name, 0, winreg.REG_SZ, value)
+            winreg.SetValueEx(key, name, 0, value_type, data)
 
     def delete_value(self, view: ViewKey, path: str, name: str | None) -> None:
         _assert_writable(view)
@@ -181,7 +213,7 @@ class WinRegAdapter(RegistryAdapter):
                 return None
             return str(value)
 
-    def read_values(self, view: ViewKey, path: str) -> dict[str, str]:
+    def read_values_typed(self, view: ViewKey, path: str) -> dict[str, tuple[str, int]]:
         key = self._open(view, path)
         if key is None:
             return {}
@@ -199,4 +231,5 @@ class WinRegAdapter(RegistryAdapter):
                     winreg.REG_DWORD,
                     winreg.REG_NONE,
                 ):
-                    result[name] = "" if value is None else str(value)
+                    # 空 REG_NONE 经 EnumValue 读出为 None，归一为空串
+                    result[name] = ("" if value is None else str(value), value_type)

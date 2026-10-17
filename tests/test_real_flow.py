@@ -76,9 +76,11 @@ class TestRealProgIdFlow:
     def test_register_and_unregister_cycle(self, tmp_path):
         reg = WinRegAdapter()
         manager = ProgIdManager(reg, BackupManager(data_dir=tmp_path))
+        exe = tmp_path / "famtestapp.exe"
+        exe.write_bytes(b"")
 
         managed = manager.register(
-            ".FileAssocManagerTest.zzz", "C:\\fake\\famtestapp.exe"
+            ".FileAssocManagerTest.zzz", str(exe)
         )
         assert (
             reg.read_default(ViewKey.USER_CLASSES, ".FileAssocManagerTest.zzz")
@@ -88,7 +90,7 @@ class TestRealProgIdFlow:
             reg.read_default(
                 ViewKey.USER_CLASSES, r"FAM.famtestapp\shell\open\command"
             )
-            == '"C:\\fake\\famtestapp.exe" "%1"'
+            == f'"{exe}" "%1"'
         )
 
         manager.unregister(managed.prog_id)

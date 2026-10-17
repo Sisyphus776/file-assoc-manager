@@ -15,11 +15,11 @@
   ```bash
   pwsh.exe -NoProfile -File 'D:\AgentWorkPlace\code\file-assoc-manager\build.ps1'
   ```
-  版本号在 build.ps1 与 pyproject.toml 两处，升级时同步改。
+  版本号单一事实源是 pyproject.toml，build.ps1 自动读取。
 
 ## 新增技术决策
 
-1. **WOW64 双视图（第一阶段就实现）**：注册表适配层统一收口所有打开系统级键的调用，显式传 `KEY_WOW64_64KEY` / `KEY_WOW64_32KEY`，禁止依赖 winreg 默认视图；HKCR/HKLM 固定双视图扫描合并。数据模型必须带 `registry_view` 字段（用户级/64位/32位）。
+1. **WOW64 双视图（第一阶段就实现）**：注册表适配层统一收口所有打开系统级键的调用，显式传 `KEY_WOW64_64KEY` / `KEY_WOW64_32KEY`，禁止依赖 winreg 默认视图；系统级视图固定用 `HKLM\Software\Classes` 双视图（不能用 `HKCR`——它是合并视图，会把 `HKCU\Software\Classes` 的内容混入"系统级"结果）。数据模型必须带 `registry_view` 字段（用户级/64位/32位）。
 2. **不复用「文件默认大师」（qianli-wang/default-app）的代码**：其核心是删除并伪造 UserChoice 哈希，踩本项目红线，且其哈希算法无效。仅借鉴其「规则 JSON + PATH 扫描匹配」思路。
 3. **分发与误报**（打包阶段执行，决策现在固定）：one-folder；禁用 UPX；无管理员清单（工具只写 HKCU，不请求提权）；zip 附 SHA-256；README 写 Defender 白名单步骤；构建产物不上传 VirusTotal；代码签名第一版不做（EV 证书成本高，必要时再议）。
 4. **GUI 验证由用户实机操作**，Claude 不做界面视觉验证。

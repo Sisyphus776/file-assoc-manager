@@ -48,9 +48,42 @@ class TestRemoveOpenWithEntry:
         assert op is not None
         assert op.value_name == "b"
         values = reg.read_values(ViewKey.USER_FILE_EXTS, ".txt\\OpenWithList")
-        assert values == {"a": "notepad.exe", "MRUList": "ba"}
-        # 备份先行：.reg 快照与日志都已生成
+        # 删除 "b" 后 MRUList 同步从 "ba" 变为 "a"
+        assert values == {"a": "notepad.exe", "MRUList": "a"}
+        # 备份先行：目标值 + MRUList 各一条
+        assert len(backup.list_operations()) == 2
+
+    def test_mru_list_absent_is_tolerated(self, tmp_path):
+        """OpenWithList 里没有 MRUList 时，删除照常进行且不报错。"""
+        reg = MockRegistryAdapter(
+            {
+                ViewKey.USER_FILE_EXTS: mock_key(
+                    subkeys={
+                        ".txt": mock_key(
+                            subkeys={
+                                "OpenWithList": mock_key(values={"a": "oldapp.exe"})
+                            }
+                        )
+                    }
+                )
+            }
+        )
+        backup = BackupManager(data_dir=tmp_path)
+        op = remove_open_with_entry(reg, backup, ".txt", "oldapp.exe")
+        assert op is not None
+        assert reg.read_values(ViewKey.USER_FILE_EXTS, ".txt\\OpenWithList") == {}
         assert len(backup.list_operations()) == 1
+
+    def test_mru_list_restored_with_entry(self, tmp_path):
+        """恢复时 MRUList 快照也应恢复原有顺序串。"""
+        reg = make_reg()
+        backup = BackupManager(data_dir=tmp_path)
+        remove_open_with_entry(reg, backup, ".txt", "oldapp.exe")
+        ops = backup.list_operations()
+        for op in ops:
+            backup.restore(reg, op)
+        values = reg.read_values(ViewKey.USER_FILE_EXTS, ".txt\\OpenWithList")
+        assert values == {"a": "notepad.exe", "b": "oldapp.exe", "MRUList": "ba"}
 
     def test_mrulist_is_never_removed(self, tmp_path):
         reg = make_reg()

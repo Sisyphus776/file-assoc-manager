@@ -4,6 +4,7 @@
 本模块只负责展示与触发。视觉验证由用户实机进行。
 """
 
+import ctypes
 import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
@@ -22,6 +23,20 @@ from .models import Association, RegistryView, Status
 from .registry import WinRegAdapter
 from .resolver import resolve_all
 from .scanner import scan
+
+# SHChangeNotify 常量：关联变更后刷新资源管理器缓存
+_SHCNE_ASSOCCHANGED = 0x08000000
+_SHCNF_IDLIST = 0x0000
+
+
+def _notify_shell_assoc_changed() -> None:
+    """通知 Shell 文件关联已变更，刷新图标与打开方式缓存。"""
+    try:
+        ctypes.windll.shell32.SHChangeNotify(
+            _SHCNE_ASSOCCHANGED, _SHCNF_IDLIST, None, None
+        )
+    except Exception:
+        pass  # 通知失败不影响操作本身
 
 _STATUS_LABELS = {
     Status.VALID: "Valid",
@@ -142,8 +157,13 @@ def current_default_of(records: list[Association], extension: str) -> str | None
     )
     if choice is None:
         return None
+    prog_id_lower = choice.prog_id.lower()
     target = next(
-        (r.target_path for r in records if r.prog_id == choice.prog_id and r.target_path),
+        (
+            r.target_path
+            for r in records
+            if r.prog_id and r.prog_id.lower() == prog_id_lower and r.target_path
+        ),
         None,
     )
     return target or choice.prog_id
@@ -671,6 +691,7 @@ class FileAssocManagerApp(tk.Tk):
                 t("Cleanup complete"), t("Cleaned {count} item(s).", count=len(cleanable))
             )
         self._populate_backup()
+        _notify_shell_assoc_changed()
         self._start_scan()
 
     # ---------- 备份恢复页 ----------
@@ -721,6 +742,7 @@ class FileAssocManagerApp(tk.Tk):
         messagebox.showinfo(
             t("Restore complete"), t("Restored {count} item(s).", count=len(selected))
         )
+        _notify_shell_assoc_changed()
         self._start_scan()
 
     # ---------- 我的关联页 ----------
@@ -761,6 +783,7 @@ class FileAssocManagerApp(tk.Tk):
         self.ext_entry.delete(0, "end")
         self.path_entry.delete(0, "end")
         self._populate_managed()
+        _notify_shell_assoc_changed()
         self._start_scan()
 
     def _populate_managed(self):
@@ -810,6 +833,7 @@ class FileAssocManagerApp(tk.Tk):
             t("Unregistered {count} association(s).", count=len(selected)),
         )
         self._populate_managed()
+        _notify_shell_assoc_changed()
         self._start_scan()
 
 

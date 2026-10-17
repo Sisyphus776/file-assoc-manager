@@ -101,6 +101,51 @@ class TestRestore:
         assert values["a"] == "notepad.exe"
         assert values["x"] == "keep"
 
+    def test_restore_preserves_dword_type(self, tmp_path):
+        """REG_DWORD 备份后恢复仍为 DWORD，不退化为 REG_SZ。"""
+        import winreg
+
+        reg = MockRegistryAdapter()
+        backup = make_backup(tmp_path)
+        op = backup.record_removal(
+            ViewKey.USER_FILE_EXTS, ".txt\\OpenWithList", "n", "42", ".txt",
+            winreg.REG_DWORD,
+        )
+        backup.restore(reg, op)
+        typed = reg.read_values_typed(ViewKey.USER_FILE_EXTS, ".txt\\OpenWithList")
+        assert typed["n"] == ("42", winreg.REG_DWORD)
+
+    def test_reg_snapshot_dword_uses_dword_syntax(self, tmp_path):
+        import winreg
+
+        backup = make_backup(tmp_path)
+        op = backup.record_removal(
+            ViewKey.USER_FILE_EXTS, ".txt\\OpenWithList", "n", "42", ".txt",
+            winreg.REG_DWORD,
+        )
+        content = open(op.backup_file, encoding="utf-16", newline="").read()
+        assert '"n"=dword:0000002a\r\n' in content
+
+    def test_reg_snapshot_value_name_is_escaped(self, tmp_path):
+        backup = make_backup(tmp_path)
+        op = backup.record_removal(
+            ViewKey.USER_FILE_EXTS, ".txt\\OpenWithList", 'a"b\\c', "prog.exe"
+        )
+        content = open(op.backup_file, encoding="utf-16", newline="").read()
+        assert '"a\\"b\\\\c"="prog.exe"\r\n' in content
+
+    def test_same_millisecond_backups_do_not_overwrite(self, tmp_path):
+        backup = make_backup(tmp_path)
+        # 连续两次快照（极可能落在同一毫秒）：必须生成两个不同文件
+        op1 = backup.record_removal(
+            ViewKey.USER_FILE_EXTS, ".txt\\OpenWithList", "a", "x.exe"
+        )
+        op2 = backup.record_removal(
+            ViewKey.USER_FILE_EXTS, ".txt\\OpenWithList", "b", "y.exe"
+        )
+        assert op1.backup_file != op2.backup_file
+        assert len(list((tmp_path / "backups").glob("*.reg"))) == 2
+
 
 class TestDataDir:
     def test_default_uses_appdata(self, monkeypatch, tmp_path):

@@ -19,20 +19,44 @@ def remove_open_with_entry(
     """删除 FileExts\\.ext\\OpenWithList 中值内容为 program_name 的条目。
 
     值名是字母索引（a/b/c），必须按值内容定位；MRUList 是顺序索引串，
-    跳过。未找到时返回 None。
+    跳过。删除后同步从 MRUList 中移除该字母，避免悬挂引用。
+    未找到时返回 None。
     """
     view = ViewKey.USER_FILE_EXTS
     path = f"{extension}\\OpenWithList"
-    for value_name, value_data in reg.read_values(view, path).items():
+    typed_values = reg.read_values_typed(view, path)
+    for value_name, (value_data, value_type) in typed_values.items():
         if value_name == "MRUList":
             continue
         if value_data == program_name:
             operation = backup.record_removal(
-                view, path, value_name, value_data, extension
+                view, path, value_name, value_data, extension, value_type
             )
             reg.delete_value(view, path, value_name)
+            _sync_mru_list(reg, backup, path, value_name, extension)
             return operation
     return None
+
+
+def _sync_mru_list(
+    reg: RegistryAdapter,
+    backup: BackupManager,
+    path: str,
+    removed_letter: str,
+    extension: str,
+) -> None:
+    """删除 OpenWithList 条目后，把被删字母从 MRUList 顺序串中剔除。"""
+    view = ViewKey.USER_FILE_EXTS
+    typed = reg.read_values_typed(view, path)
+    entry = typed.get("MRUList")
+    if entry is None:
+        return
+    mru_old, mru_type = entry
+    mru_new = mru_old.replace(removed_letter, "", 1)
+    if mru_new == mru_old:
+        return
+    backup.record_removal(view, path, "MRUList", mru_old, extension, mru_type)
+    reg.set_value(view, path, "MRUList", mru_new, value_type=mru_type)
 
 
 def remove_open_with_progid(
@@ -47,11 +71,12 @@ def remove_open_with_progid(
     """
     view = ViewKey.USER_FILE_EXTS
     path = f"{extension}\\OpenWithProgids"
-    values = reg.read_values(view, path)
-    if prog_id not in values:
+    typed_values = reg.read_values_typed(view, path)
+    if prog_id not in typed_values:
         return None
+    value_data, value_type = typed_values[prog_id]
     operation = backup.record_removal(
-        view, path, prog_id, values[prog_id], extension
+        view, path, prog_id, value_data, extension, value_type
     )
     reg.delete_value(view, path, prog_id)
     return operation

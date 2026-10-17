@@ -100,13 +100,21 @@ def _is_app_user_model_id(path: str) -> bool:
     return "!" in path and not os.path.isabs(path)
 
 
+# 无引号路径拼接时，遇到这些扩展名即视为路径完整（即使文件已不存在）。
+_EXECUTABLE_EXTS = (".exe", ".com", ".bat", ".cmd", ".msi", ".psc1")
+
+# 命令行占位参数，拼接遇到即停。
+_PLACEHOLDER_TOKENS = frozenset({"%1", "%*", "%2", "%3", "%4"})
+
+
 def _extract_program_path(command: str) -> str | None:
     """从打开命令字符串中提取程序路径。
 
     处理引号包裹的路径、%VAR% 环境变量与 "%1" 等参数。
     无引号且路径含空格时（如 D:\\Program Files\\...\\app.exe），
     从首 token 起逐个追加，取最长的「确实存在的文件」路径；
-    遇到 "%1" 或以 .exe 结尾即停。不保证文件存在（可能已卸载）。
+    遇到 %1 等占位符、或路径以可执行扩展名结尾即停。
+    不保证文件存在（可能已卸载）。
     """
     command = os.path.expandvars(command.strip())
     if not command:
@@ -115,18 +123,18 @@ def _extract_program_path(command: str) -> str | None:
         end = command.find('"', 1)
         return command[1:end] if end != -1 else command[1:]
     parts = command.split()
-    candidate = parts[0]
-    best = candidate
-    for token in parts[1:]:
-        candidate += " " + token
+    best = parts[0]
+    candidate = ""
+    for token in parts:
+        if token in _PLACEHOLDER_TOKENS:
+            break
+        candidate = token if not candidate else candidate + " " + token
         if os.path.isfile(candidate):
-            best = candidate
-        if token == "%1":
-            break
-        if candidate.lower().endswith(".exe"):
-            # .exe 结尾说明路径已完整，即使文件不存在（已卸载）
-            best = candidate
-            break
+            return candidate
+        if candidate.lower().endswith(_EXECUTABLE_EXTS):
+            # 可执行扩展名结尾说明路径已完整，即使文件不存在（已卸载）
+            return candidate
+        best = candidate
     return best
 
 
@@ -140,10 +148,19 @@ def _resolve_by_name(reg: RegistryAdapter, name: str) -> str | None:
 
 
 def _search_path(name: str) -> str | None:
-    if not os.path.splitext(name)[1]:
-        name += ".exe"
+    base_name, ext = os.path.splitext(name)
+    if ext:
+        # 已有扩展名，直接搜
+        for directory in os.environ.get("PATH", "").split(os.pathsep):
+            candidate = os.path.join(directory, name)
+            if os.path.isfile(candidate):
+                return candidate
+        return None
+    # 无扩展名：按 PATHEXT 顺序补扩展名（.exe .com .bat .cmd ...）
+    pathext = os.environ.get("PATHEXT", ".exe")
     for directory in os.environ.get("PATH", "").split(os.pathsep):
-        candidate = os.path.join(directory, name)
-        if os.path.isfile(candidate):
-            return candidate
+        for suffix in pathext.split(os.pathsep):
+            candidate = os.path.join(directory, base_name + suffix)
+            if os.path.isfile(candidate):
+                return candidate
     return None

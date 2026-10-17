@@ -6,22 +6,30 @@
 # 打包结果启动即崩溃。
 $ErrorActionPreference = 'Stop'
 
-$tclLib = 'D:\Anaconda\envs\py313\Library\lib\tcl8.6'
-$tkLib = 'D:\Anaconda\envs\py313\Library\lib\tk8.6'
+$root = 'D:\AgentWorkPlace\code\file-assoc-manager'
+$python = "$root\.venv-win\Scripts\python.exe"
+
+# 从 venv 的 base_prefix 动态定位 Anaconda 环境的 Tcl/Tk 数据目录，
+# 避免硬编码绝对路径（换机器时只要 venv 可解析即可）。
+$basePrefix = & $python -c "import sys; print(sys.base_prefix)"
+$tclLib = Join-Path $basePrefix 'Library\lib\tcl8.6'
+$tkLib = Join-Path $basePrefix 'Library\lib\tk8.6'
 if (-not (Test-Path $tclLib)) { throw "tcl not found: $tclLib" }
 if (-not (Test-Path $tkLib)) { throw "tk not found: $tkLib" }
 
 $env:TCL_LIBRARY = $tclLib
 $env:TK_LIBRARY = $tkLib
 
-& 'D:\AgentWorkPlace\code\file-assoc-manager\.venv-win\Scripts\python.exe' `
-    -m PyInstaller --clean --noconfirm FileAssocManager.spec
+& $python -m PyInstaller --clean --noconfirm FileAssocManager.spec
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed with exit code $LASTEXITCODE" }
 
 # 打包分发 zip：README/LICENSE 复制进构建目录，压缩并生成 SHA-256。
-# 版本号与 pyproject.toml 保持一致，升级时两处同步改。
-$version = '0.3.0'
-$root = 'D:\AgentWorkPlace\code\file-assoc-manager'
+# 版本号从 pyproject.toml 读取，与包元数据保持单一事实源。
+$pyproject = Get-Content "$root\pyproject.toml" -Raw
+if ($pyproject -notmatch '(?m)^version\s*=\s*"([^"]+)"') {
+    throw "version not found in pyproject.toml"
+}
+$version = $Matches[1]
 $appDir = "$root\dist\FileAssocManager"
 Copy-Item "$root\README.txt", "$root\LICENSE" -Destination $appDir -Force
 $zipPath = "$root\dist\FileAssocManager-v$version-win-x64.zip"

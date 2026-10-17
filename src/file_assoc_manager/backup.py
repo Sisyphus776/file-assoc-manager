@@ -7,6 +7,7 @@
 
 import json
 import os
+import winreg
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -45,6 +46,7 @@ class Operation:
     value_name: str | None  # 被删除的值；None 表示默认值
     value_data: str  # 被删除值的内容快照
     backup_file: str  # .reg 快照文件路径
+    value_type: int = winreg.REG_SZ  # 原始 winreg 类型（恢复时保真）
 
 
 class BackupManager:
@@ -60,6 +62,7 @@ class BackupManager:
         value_name: str | None,
         value_data: str,
         extension: str = "",
+        value_type: int = winreg.REG_SZ,
     ) -> Operation:
         """删除前的快照：写 .reg 备份 + 追加 JSON 日志。
 
@@ -68,10 +71,12 @@ class BackupManager:
         if view not in _HIVE_PATHS:
             raise ValueError(f"不可备份的视图: {view}")
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
-        backup_file = self.backup_dir / f"{timestamp}_remove.reg"
+        backup_file = self._unique_backup_path(timestamp)
         self.backup_dir.mkdir(parents=True, exist_ok=True)
         backup_file.write_text(
-            _build_reg_file(_HIVE_PATHS[view], key_path, value_name, value_data),
+            _build_reg_file(
+                _HIVE_PATHS[view], key_path, value_name, value_data, value_type
+            ),
             encoding="utf-16",  # reg v5 格式：UTF-16 LE 带 BOM
             newline="",  # 保持 \r\n 字面，不依赖平台换行转换
         )
@@ -84,9 +89,19 @@ class BackupManager:
             value_name=value_name,
             value_data=value_data,
             backup_file=str(backup_file),
+            value_type=value_type,
         )
         self._append_log(operation)
         return operation
+
+    def _unique_backup_path(self, timestamp: str) -> Path:
+        """同毫秒内的多次操作不能互相覆盖：追加序号直到不重名。"""
+        candidate = self.backup_dir / f"{timestamp}_remove.reg"
+        counter = 1
+        while candidate.exists():
+            candidate = self.backup_dir / f"{timestamp}_remove_{counter}.reg"
+            counter += 1
+        return candidate
 
     def list_operations(self) -> list[Operation]:
         """按时间倒序返回操作历史；日志缺失时返回空列表。"""
@@ -101,12 +116,13 @@ class BackupManager:
         return result
 
     def restore(self, reg: RegistryAdapter, operation: Operation) -> None:
-        """把被删除的值写回原位置。"""
+        """把被删除的值按原始类型写回原位置。"""
         reg.set_value(
             ViewKey(operation.view),
             operation.key_path,
             operation.value_name,
             operation.value_data,
+            value_type=operation.value_type,
         )
 
     def _append_log(self, operation: Operation) -> None:
@@ -123,15 +139,37 @@ class BackupManager:
         )
 
 
+def _escape_reg_string(text: str) -> str:
+    """.reg 字符串字面量转义：反斜杠与双引号。"""
+    return text.replace("\\", "\\\\").replace('"', '\\"')
+
+
 def _build_reg_file(
-    hive_path: str, key_path: str, value_name: str | None, value_data: str
+    hive_path: str,
+    key_path: str,
+    value_name: str | None,
+    value_data: str,
+    value_type: int = winreg.REG_SZ,
 ) -> str:
-    """生成 Windows Registry Editor Version 5.00 格式的快照文本。"""
+    """生成 Windows Registry Editor Version 5.00 格式的快照文本。
+
+    REG_SZ / REG_EXPAND_SZ 以字符串语法写出（EXPAND_SZ 导入后类型退化为
+    REG_SZ，属可接受近似）；REG_DWORD 用 dword: 语法；空 REG_NONE 用 hex(0):。
+    """
     full_key = f"{hive_path}\\{key_path}" if key_path else hive_path
-    escaped = value_data.replace("\\", "\\\\").replace('"', '\\"')
-    value_line = (
-        f'@="{escaped}"\r\n' if value_name is None else f'"{value_name}"="{escaped}"\r\n'
-    )
+    if value_name is None:
+        name_part = "@"
+    else:
+        name_part = f'"{_escape_reg_string(value_name)}"'
+    if value_type == winreg.REG_DWORD:
+        data_part = f"dword:{int(value_data):08x}"
+    elif value_type == winreg.REG_NONE:
+        data_part = "hex(0):" if not value_data else (
+            "hex(0):" + ",".join(f"{b:02x}" for b in value_data.encode("utf-8"))
+        )
+    else:
+        data_part = f'"{_escape_reg_string(value_data)}"'
+    value_line = f"{name_part}={data_part}\r\n"
     return (
         "Windows Registry Editor Version 5.00\r\n"
         "\r\n"

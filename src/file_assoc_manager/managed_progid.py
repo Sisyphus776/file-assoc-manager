@@ -34,7 +34,12 @@ class ProgIdManager:
         self.managed_path = Path(backup.data_dir) / "managed.json"
 
     def register(self, extension: str, program_path: str) -> ManagedProgId:
-        """注册便携程序的关联；重复注册同一程序时保留最初的原默认值。"""
+        """注册便携程序的关联；重复注册同一程序时保留最初的原默认值。
+
+        program_path 必须是实际存在的可执行文件路径，否则抛出 ValueError。
+        """
+        if not os.path.isfile(program_path):
+            raise ValueError(f"程序路径不存在: {program_path}")
         ext = extension if extension.startswith(".") else f".{extension}"
         prog_id = PROGID_PREFIX + _sanitize_stem(program_path)
         records = _load(self.managed_path)
@@ -67,11 +72,38 @@ class ProgIdManager:
         return _load(self.managed_path)
 
     def unregister(self, prog_id: str) -> None:
-        """撤销本工具创建的关联：恢复扩展名原默认值并删除 ProgID 键。"""
+        """撤销本工具创建的关联：恢复扩展名原默认值并删除 ProgID 键。
+
+        删除前先备份 command 值与当前扩展名默认值，确保可恢复。
+        """
         records = _load(self.managed_path)
         match = next((r for r in records if r.prog_id == prog_id), None)
         if match is None:
             raise ValueError(f"不是本工具管理的 ProgID: {prog_id}")
+
+        # 备份 command 值（ProgID 键树的核心）
+        cmd = self.reg.read_default(
+            ViewKey.USER_CLASSES, f"{match.prog_id}\\shell\\open\\command"
+        )
+        if cmd is not None:
+            self.backup.record_removal(
+                ViewKey.USER_CLASSES,
+                f"{match.prog_id}\\shell\\open\\command",
+                None,
+                cmd,
+                match.extension,
+            )
+
+        # 备份当前扩展名默认值（将被恢复或删除）
+        current_default = self.reg.read_default(ViewKey.USER_CLASSES, match.extension)
+        if current_default is not None:
+            self.backup.record_removal(
+                ViewKey.USER_CLASSES,
+                match.extension,
+                None,
+                current_default,
+                match.extension,
+            )
 
         if match.previous_default is not None:
             self.reg.set_value(

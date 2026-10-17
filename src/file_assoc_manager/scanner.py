@@ -3,7 +3,7 @@
 扫描三处关联来源：
 1. HKCU 的 FileExts（用户打开方式、UserChoice、历史残留）
 2. HKCU\\Software\\Classes（用户级扩展名与 ProgID 定义）
-3. HKCR 的 64 位与 32 位视图（系统级定义，WOW64 双视图各自扫描）
+3. HKLM\\Software\\Classes 的 64 位与 32 位视图（系统级定义，WOW64 双视图各自扫描）
 
 扫描结果按 (extension, source, view) 为粒度产出，不合并去重——
 同一条打开方式的「用户历史」与「当前定义」是不同来源，必须分别展示。
@@ -24,8 +24,8 @@ _SOURCE_PREFIX: dict[ViewKey, str] = {
         r"HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts"
     ),
     ViewKey.USER_CLASSES: r"HKCU\Software\Classes",
-    ViewKey.SYSTEM_CLASSES_64: "HKCR",
-    ViewKey.SYSTEM_CLASSES_32: "HKCR",
+    ViewKey.SYSTEM_CLASSES_64: r"HKLM\Software\Classes",
+    ViewKey.SYSTEM_CLASSES_32: r"HKLM\Software\Classes",
 }
 
 

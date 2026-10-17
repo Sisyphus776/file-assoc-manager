@@ -10,7 +10,7 @@
 
 - `HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\<extension>`：用户的打开方式、用户选择和关联历史；
 - `HKCU\\Software\\Classes\\<ProgID>`：当前用户的 ProgID 定义；
-- 系统级 `HKCR`/`HKLM`：第一版只读，用于补充解析命令。
+- 系统级 `HKLM\Software\Classes`（64 位与 32 位视图）：第一版只读，用于补充解析命令。不使用 `HKCR`，因为它是合并视图，会把 `HKCU\Software\Classes` 的内容混入"系统级"结果。
 
 ## 3. 扫描模型
 

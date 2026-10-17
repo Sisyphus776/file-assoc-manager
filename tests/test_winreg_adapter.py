@@ -63,12 +63,15 @@ class TestWinRegAdapter:
         assert reg.read_default(ViewKey.USER_CLASSES, TEST_KEY) is None
         assert reg.read_values(ViewKey.USER_CLASSES, TEST_KEY) == {"Only": "v"}
 
-    def test_hkcr_merged_view_sees_user_classes(self):
-        """HKCR 是合并视图，HKCU\\Software\\Classes 的内容在 64 位视图下
-        应能被 SYSTEM_CLASSES_64 读到——验证 WOW64 标志打开正常。"""
+    def test_system_views_do_not_see_user_classes(self):
+        """系统级视图基于 HKLM\\Software\\Classes（而非合并视图 HKCR），
+        HKCU\\Software\\Classes 的内容不得出现在系统视图——验证视图隔离。"""
         _create_sample()
         reg = WinRegAdapter()
-        assert reg.read_default(ViewKey.SYSTEM_CLASSES_64, TEST_KEY) == "testprog"
+        assert reg.read_default(ViewKey.SYSTEM_CLASSES_64, TEST_KEY) is None
+        assert reg.read_default(ViewKey.SYSTEM_CLASSES_32, TEST_KEY) is None
+        # 用户级视图仍然可读
+        assert reg.read_default(ViewKey.USER_CLASSES, TEST_KEY) == "testprog"
 
 
 class TestWriteMethods:
@@ -98,6 +101,21 @@ class TestWriteMethods:
         reg.delete_value(ViewKey.USER_CLASSES, rf"{TEST_KEY}\Sub", "x")
         reg.delete_key(ViewKey.USER_CLASSES, rf"{TEST_KEY}\Sub")
         assert reg.list_subkeys(ViewKey.USER_CLASSES, TEST_KEY) == []
+
+    def test_typed_roundtrip_preserves_type(self):
+        """带类型写入后，read_values_typed 能取回原始 winreg 类型。"""
+        reg = WinRegAdapter()
+        reg.set_value(ViewKey.USER_CLASSES, TEST_KEY, "Dw", "42",
+                      value_type=winreg.REG_DWORD)
+        reg.set_value(ViewKey.USER_CLASSES, TEST_KEY, "Sz", "hello")
+        typed = reg.read_values_typed(ViewKey.USER_CLASSES, TEST_KEY)
+        assert typed["Dw"] == ("42", winreg.REG_DWORD)
+        assert typed["Sz"] == ("hello", winreg.REG_SZ)
+        # 便捷接口行为不变
+        assert reg.read_values(ViewKey.USER_CLASSES, TEST_KEY) == {
+            "Dw": "42",
+            "Sz": "hello",
+        }
 
     def test_system_view_write_is_rejected(self):
         """写入系统级视图必须被硬性拒绝，这是项目的核心安全红线。"""

@@ -148,3 +148,12 @@ class TestCurrentDefault:
             rec(source=r"HKCU\...\FileExts\.TXT\UserChoice", prog_id="txtfile"),
         ]
         assert current_default_of(records, ".txt") == "txtfile"
+
+    def test_progid_match_is_case_insensitive(self):
+        """UserChoice 里的 ProgID 与解析记录大小写不同时也能找到路径。"""
+        records = [
+            rec(source=r"HKCU\...\FileExts\.txt\UserChoice", prog_id="TXTFile"),
+            rec(source=r"HKCU\Software\Classes\.txt", prog_id="txtfile",
+                target_path=r"C:\Windows\notepad.exe"),
+        ]
+        assert current_default_of(records, ".txt") == r"C:\Windows\notepad.exe"

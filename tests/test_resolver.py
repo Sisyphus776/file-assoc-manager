@@ -133,6 +133,22 @@ class TestExtractProgramPath:
         )
         assert record.status == Status.INVALID
 
+    def test_unquoted_bat_path_with_spaces_uninstalled(self):
+        """非 .exe 可执行扩展名（.bat）：路径含空格且已卸载时不能截断。"""
+        record = make_record(prog_id="p")
+        reg = MockRegistryAdapter(
+            {
+                ViewKey.USER_CLASSES: mock_key(
+                    subkeys=classes_tree(
+                        "p", 'D:\\My Apps\\player\\player.bat %1'
+                    )
+                )
+            }
+        )
+        resolve(record, reg)
+        assert record.target_path == "D:\\My Apps\\player\\player.bat"
+        assert record.status == Status.INVALID
+
     def test_env_var_expansion(self, monkeypatch):
         monkeypatch.setenv("TEST_APP_DIR", "C:\\envdir")
         record = make_record(prog_id="p")
@@ -197,6 +213,20 @@ class TestStatusClassification:
         resolve(record, reg)
         assert record.status == Status.VALID
         assert record.target_path == str(fake)
+
+    def test_bare_name_resolved_via_pathext_bat(self, tmp_path, monkeypatch):
+        """裸名无扩展名时按 PATHEXT 搜索，能找到 .bat。"""
+        bat = tmp_path / "tool.bat"
+        bat.write_bytes(b"")
+        monkeypatch.setenv("PATH", str(tmp_path))
+        monkeypatch.setenv("PATHEXT", ".exe;.bat")
+        record = make_record(prog_id="p")
+        reg = MockRegistryAdapter(
+            {ViewKey.USER_CLASSES: mock_key(subkeys=classes_tree("p", "tool %1"))}
+        )
+        resolve(record, reg)
+        assert record.status == Status.VALID
+        assert record.target_path == str(bat)
 
     def test_unresolvable_bare_name_is_invalid(self, monkeypatch):
         monkeypatch.setenv("PATH", "")

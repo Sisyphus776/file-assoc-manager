@@ -1,5 +1,6 @@
 """内存版注册表适配层，测试专用（见 CLAUDE.md 测试策略）。"""
 
+import winreg
 from dataclasses import dataclass, field
 
 from file_assoc_manager.registry import RegistryAdapter, ViewKey, _assert_writable
@@ -9,6 +10,7 @@ from file_assoc_manager.registry import RegistryAdapter, ViewKey, _assert_writab
 class MockKey:
     subkeys: dict[str, "MockKey"] = field(default_factory=dict)
     values: dict[str, str] = field(default_factory=dict)
+    types: dict[str, int] = field(default_factory=dict)
     default: str | None = None
 
 
@@ -44,9 +46,14 @@ class MockRegistryAdapter(RegistryAdapter):
         node = self._lookup(view, path)
         return node.default if node else None
 
-    def read_values(self, view: ViewKey, path: str) -> dict[str, str]:
+    def read_values_typed(self, view: ViewKey, path: str) -> dict[str, tuple[str, int]]:
         node = self._lookup(view, path)
-        return dict(node.values) if node else {}
+        if node is None:
+            return {}
+        return {
+            name: (value, node.types.get(name, winreg.REG_SZ))
+            for name, value in node.values.items()
+        }
 
     def _ensure(self, view: ViewKey, path: str) -> MockKey:
         """创建（或返回已有的）path 节点链。"""
@@ -59,13 +66,19 @@ class MockRegistryAdapter(RegistryAdapter):
         return node
 
     def set_value(
-        self, view: ViewKey, path: str, name: str | None, value: str
+        self,
+        view: ViewKey,
+        path: str,
+        name: str | None,
+        value: str,
+        value_type: int = winreg.REG_SZ,
     ) -> None:
         node = self._ensure(view, path)
         if name is None:
             node.default = value
         else:
             node.values[name] = value
+            node.types[name] = value_type
 
     def delete_value(
         self, view: ViewKey, path: str, name: str | None
@@ -77,6 +90,7 @@ class MockRegistryAdapter(RegistryAdapter):
                 node.default = None
             else:
                 node.values.pop(name, None)
+                node.types.pop(name, None)
 
     def delete_key(self, view: ViewKey, path: str) -> None:
         _assert_writable(view)

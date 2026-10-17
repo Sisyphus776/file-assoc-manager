@@ -126,7 +126,7 @@ class TestWow64DualView:
         records = scan(reg)
         assert len(records) == 1
         assert records[0].view == RegistryView.SYSTEM_32
-        assert records[0].source == r"HKCR\.legacy"
+        assert records[0].source == r"HKLM\Software\Classes\.legacy"
 
     def test_records_are_not_merged_across_sources(self):
         """FileExts 的 OpenWithProgids 与 Classes 默认值指向同一 ProgID
