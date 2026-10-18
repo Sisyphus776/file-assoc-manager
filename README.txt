@@ -1,4 +1,4 @@
-文件关联管家 v0.3.2
+文件关联管家 v0.4.0
 ===================
 
 给被"右键 → 打开方式里一堆幽灵程序"困扰的 Windows 用户。
@@ -67,7 +67,7 @@ Windows Defender 添加信任：
 ----------
 发布包附带 SHA-256 校验和（.sha256 文件）。PowerShell 中执行：
 
-  Get-FileHash .\FileAssocManager-v0.3.2-win-x64.zip -Algorithm SHA256
+  Get-FileHash .\FileAssocManager-v0.4.0-win-x64.zip -Algorithm SHA256
 
 与 .sha256 文件中的值一致即说明下载完整未被篡改。
 

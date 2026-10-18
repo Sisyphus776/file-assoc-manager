@@ -67,7 +67,13 @@ For Windows users tired of ghost entries in "Open with", and for anyone who want
 
 ### 当前状态
 
-v0.3.2 已发布：只读扫描、失效检测、选择性清理（仅失效条目）、备份恢复、本工具创建的关联管理、中英双语 tkinter GUI、PyInstaller 便携包。发布包与 SHA-256 见 [Releases](../../releases)。
+v0.4.0 已发布：只读扫描、失效检测、选择性清理（仅失效条目）、备份恢复、本工具创建的关联管理、中英双语 tkinter GUI、PyInstaller 便携包。发布包与 SHA-256 见 [Releases](../../releases)。
+
+v0.4.0 的新增：
+
+- 失效条目会尝试在同一安装目录下按文件名再找一层（最多 3 层），命中时在「疑似新路径」列给出提示；
+- 扫描页新增「疑似新路径」列，行详情窗口同步展示；
+- 判定结果不变，仍是「有效 / 失效 / 无法判断」三分类，提示只作参考。
 
 v0.3.2 的改动：
 
@@ -158,7 +164,13 @@ Unknown is not invalid: such entries cannot be cleaned, and deleting them would 
 
 ### Status
 
-v0.3.2 is released: read-only scanning, broken-association detection, selective cleanup (invalid entries only), backup & restore, managed associations for portable apps, bilingual tkinter GUI, PyInstaller portable build. See [Releases](../../releases) for downloads and SHA-256.
+v0.4.0 is released: read-only scanning, broken-association detection, selective cleanup (invalid entries only), backup & restore, managed associations for portable apps, bilingual tkinter GUI, PyInstaller portable build. See [Releases](../../releases) for downloads and SHA-256.
+
+New in v0.4.0:
+
+- Invalid entries now get a "suggested path" hint when the same executable is found inside the same install folder (up to 3 levels deep);
+- The scan page has a dedicated column for it, and the row-details window shows it too;
+- The classification stays valid / invalid / unknown — the hint is informational only.
 
 Changes in v0.3.2:
 
