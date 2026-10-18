@@ -397,7 +397,11 @@ class FileAssocManagerApp(tk.Tk):
 
         columns = ("extension", "view", "status", "prog_id", "target", "reason")
         header_keys = ("Extension", "Source", "Status", "ProgID", "Program Path", "Note")
-        self.scan_tree = self._make_tree(page, columns, header_keys, (80, 80, 70, 220, 280, 300))
+        # 列宽固定（stretch=False），总宽超过窗口时水平滚动条才有效；
+        # 路径与说明列给足宽度，避免长路径被硬裁。
+        self.scan_tree = self._make_tree(
+            page, columns, header_keys, (80, 100, 80, 240, 560, 420)
+        )
 
         bottom = ttk.Frame(page)
         bottom.pack(fill="x", pady=(4, 0))
@@ -438,7 +442,9 @@ class FileAssocManagerApp(tk.Tk):
 
         columns = ("timestamp", "extension", "key_path", "value_name", "value_data")
         header_keys = ("Time", "Extension", "Key Path", "Value Name", "Value Data")
-        self.backup_tree = self._make_tree(page, columns, header_keys, (180, 90, 330, 90, 260))
+        self.backup_tree = self._make_tree(
+            page, columns, header_keys, (170, 100, 400, 130, 520)
+        )
         self._populate_backup()
         return page
 
@@ -468,7 +474,9 @@ class FileAssocManagerApp(tk.Tk):
 
         columns = ("prog_id", "extension", "program_path", "previous_default")
         header_keys = ("ProgID", "Extension", "Program Path", "Previous default")
-        self.managed_tree = self._make_tree(page, columns, header_keys, (160, 90, 320, 160))
+        self.managed_tree = self._make_tree(
+            page, columns, header_keys, (180, 100, 600, 240)
+        )
         bottom = ttk.Frame(page)
         bottom.pack(fill="x", pady=(4, 0))
         select_all = ttk.Button(bottom, command=lambda: self._check_all(self.managed_tree))
@@ -492,16 +500,20 @@ class FileAssocManagerApp(tk.Tk):
     def _make_tree(
         self, parent, columns, header_keys, column_widths
     ) -> ttk.Treeview:
-        """带勾选列的表格；勾选状态由 self._check_state 管理。"""
+        """带勾选列的表格；勾选状态由 self._check_state 管理。
+
+        列宽固定（stretch=False）：只有内容总宽超过控件宽度时，
+        水平滚动条才有意义，用户才能左右拖动看完整路径。
+        """
         frame = ttk.Frame(parent)
         frame.pack(fill="both", expand=True)
         full_columns = ("_check",) + tuple(columns)
         tree = ttk.Treeview(frame, columns=full_columns, show="headings")
         tree.heading("_check", text="☑")
-        tree.column("_check", width=34, anchor="center", stretch=False)
+        tree.column("_check", width=34, minwidth=34, anchor="center", stretch=False)
         for col, key, width in zip(columns, header_keys, column_widths):
             tree.heading(col, text=t(key))
-            tree.column(col, width=width)
+            tree.column(col, width=width, minwidth=60, stretch=False)
         yscroll = ttk.Scrollbar(frame, orient="vertical", command=tree.yview)
         xscroll = ttk.Scrollbar(frame, orient="horizontal", command=tree.xview)
         tree.configure(yscrollcommand=yscroll.set, xscrollcommand=xscroll.set)
@@ -513,7 +525,48 @@ class FileAssocManagerApp(tk.Tk):
         self._check_state[tree] = set()
         self._trees.append((tree, header_keys))
         tree.bind("<Button-1>", self._on_tree_click)
+        tree.bind("<Double-1>", self._on_tree_double_click)
         return tree
+
+    # ---------- 行详情 ----------
+
+    def _on_tree_double_click(self, event):
+        """双击任意非勾选列：弹出完整字段（长路径不用拖滚动条也能看全）。"""
+        tree = event.widget
+        if tree not in self._check_state:
+            return
+        if tree.identify_column(event.x) == "#1":
+            return  # 勾选列的双击交给勾选逻辑
+        iid = tree.identify_row(event.y)
+        if not iid:
+            return
+        self._show_row_detail(tree, iid)
+
+    def _show_row_detail(self, tree, iid):
+        columns = tree["columns"][1:]
+        blocks = []
+        for col in columns:
+            head = tree.heading(col, "text")
+            value = tree.set(iid, col)
+            blocks.append(f"{head}:\n    {value}\n")
+        win = tk.Toplevel(self)
+        win.title(t("Row details"))
+        win.geometry("820x440")
+        win.transient(self)
+        text = tk.Text(win, wrap="none", font=("Consolas", 10), padx=8, pady=8)
+        yscroll = ttk.Scrollbar(win, orient="vertical", command=text.yview)
+        xscroll = ttk.Scrollbar(win, orient="horizontal", command=text.xview)
+        text.configure(yscrollcommand=yscroll.set, xscrollcommand=xscroll.set)
+        text.grid(row=0, column=0, sticky="nsew")
+        yscroll.grid(row=0, column=1, sticky="ns")
+        xscroll.grid(row=1, column=0, sticky="ew")
+        win.rowconfigure(0, weight=1)
+        win.columnconfigure(0, weight=1)
+        text.insert("1.0", "\n".join(blocks))
+        text.configure(state="disabled")
+        ttk.Button(win, text=t("Close"), command=win.destroy).grid(
+            row=2, column=0, columnspan=2, pady=(6, 10)
+        )
 
     # ---------- 勾选交互 ----------
 

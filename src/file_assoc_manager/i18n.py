@@ -16,6 +16,8 @@ DEFAULT_LANGUAGE = "zh"
 ZH_TABLE: dict[str, str] = {
     # 窗口与通用
     "File Association Manager": "文件关联管家",
+    "Row details": "行详情（双击表格查看完整内容）",
+    "Close": "关闭",
     # 标签页
     "Scan Results": "扫描结果",
     "Backup & Restore": "备份与恢复",
