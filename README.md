@@ -66,7 +66,13 @@ For Windows users tired of ghost entries in "Open with", and for anyone who want
 
 ### 当前状态
 
-v0.3.1 已发布：只读扫描、失效检测、选择性清理（仅失效条目）、备份恢复、本工具创建的关联管理、中英双语 tkinter GUI、PyInstaller 便携包。发布包与 SHA-256 见 [Releases](../../releases)。
+v0.3.2 已发布：只读扫描、失效检测、选择性清理（仅失效条目）、备份恢复、本工具创建的关联管理、中英双语 tkinter GUI、PyInstaller 便携包。发布包与 SHA-256 见 [Releases](../../releases)。
+
+v0.3.2 的改动：
+
+- 表格列宽固定并加宽（路径列 280 → 560），水平滚动条现在真正可用；
+- 双击任意行弹出「行详情」，完整路径与命令可直接查看、复制；
+- 备份页与「我的关联」页的列宽同步调整。
 
 v0.3.1 相对 v0.3.0 的修复：
 
@@ -150,7 +156,13 @@ Unknown is not invalid: such entries cannot be cleaned, and deleting them would 
 
 ### Status
 
-v0.3.1 is released: read-only scanning, broken-association detection, selective cleanup (invalid entries only), backup & restore, managed associations for portable apps, bilingual tkinter GUI, PyInstaller portable build. See [Releases](../../releases) for downloads and SHA-256.
+v0.3.2 is released: read-only scanning, broken-association detection, selective cleanup (invalid entries only), backup & restore, managed associations for portable apps, bilingual tkinter GUI, PyInstaller portable build. See [Releases](../../releases) for downloads and SHA-256.
+
+Changes in v0.3.2:
+
+- Column widths are fixed and wider (path column 280 → 560), so the horizontal scrollbar finally works;
+- Double-click any row to open a details window with the full path and command, ready to copy;
+- The backup and managed pages got the same width treatment.
 
 Fixes in v0.3.1 over v0.3.0:
 
