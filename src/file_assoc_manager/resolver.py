@@ -30,6 +30,7 @@ _REG_PREFIX = re.compile(r"^\(Default\)\s+REG_SZ\s+", re.IGNORECASE)
 
 def resolve_all(records: list[Association], reg: RegistryAdapter) -> None:
     """就地填充每条记录的命令、路径与状态。"""
+    _nearby_cache.clear()  # 每轮扫描重新探测，避免用到过期的目录结果
     for record in records:
         resolve(record, reg)
 
@@ -79,6 +80,8 @@ def resolve(record: Association, reg: RegistryAdapter) -> None:
         else:
             record.status = Status.INVALID
             record.reason = f"Program file not found: {path}"
+            # 失效但可能只是被移走：在同一安装目录内按同名文件找一层，仅作提示
+            record.suggested_path = _find_nearby_program(path)
     else:
         resolved = _resolve_by_name(reg, path)
         if resolved:
@@ -161,6 +164,50 @@ def _extract_program_path(command: str) -> str | None:
             return candidate
         best = candidate
     return None if best.upper() in _PLACEHOLDER_TOKENS else best
+
+
+# 疑似迁移检测的边界：最多下探 3 层、最多检查 5000 个文件；
+# 只读，不执行任何程序。缓存按目标路径去重，避免同一目录重复遍历。
+_NEARBY_MAX_DEPTH = 3
+_NEARBY_MAX_FILES = 5000
+_nearby_cache: dict[str, str | None] = {}
+
+
+def _find_nearby_program(path: str) -> str | None:
+    """精确路径不存在时，在同一安装目录内按同名文件再找一层。
+
+    只用于提示「程序可能在别处」，不改变 valid/invalid 判定。
+    父目录本身不存在时直接放弃——避免退化成全盘扫描。
+    """
+    cached = _nearby_cache.get(path.lower())
+    if path.lower() in _nearby_cache:
+        return cached
+
+    name = os.path.basename(path)
+    root = os.path.dirname(path)
+    if not name or not os.path.isdir(root):
+        _nearby_cache[path.lower()] = None
+        return None
+
+    name_lower = name.lower()
+    base_depth = root.rstrip("\\/").count(os.sep)
+    seen = 0
+    found = None
+    for dirpath, dirnames, filenames in os.walk(root):
+        if dirpath.rstrip("\\/").count(os.sep) - base_depth >= _NEARBY_MAX_DEPTH:
+            dirnames[:] = []
+        seen += len(filenames)
+        if seen > _NEARBY_MAX_FILES:
+            break
+        for filename in filenames:
+            if filename.lower() == name_lower:
+                found = os.path.join(dirpath, filename)
+                break
+        if found:
+            break
+
+    _nearby_cache[path.lower()] = found
+    return found
 
 
 def _resolve_by_name(reg: RegistryAdapter, name: str) -> str | None:

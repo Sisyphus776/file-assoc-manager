@@ -395,12 +395,18 @@ class FileAssocManagerApp(tk.Tk):
         self.scan_status = ttk.Label(toolbar, text="")
         self.scan_status.pack(side="left", padx=10)
 
-        columns = ("extension", "view", "status", "prog_id", "target", "reason")
-        header_keys = ("Extension", "Source", "Status", "ProgID", "Program Path", "Note")
+        columns = (
+            "extension", "view", "status", "prog_id",
+            "target", "suggested", "reason",
+        )
+        header_keys = (
+            "Extension", "Source", "Status", "ProgID",
+            "Program Path", "Suggested path", "Note",
+        )
         # 列宽固定（stretch=False），总宽超过窗口时水平滚动条才有效；
         # 路径与说明列给足宽度，避免长路径被硬裁。
         self.scan_tree = self._make_tree(
-            page, columns, header_keys, (80, 100, 80, 240, 560, 420)
+            page, columns, header_keys, (80, 100, 80, 240, 520, 480, 380)
         )
 
         bottom = ttk.Frame(page)
@@ -684,6 +690,7 @@ class FileAssocManagerApp(tk.Tk):
                     t(_STATUS_LABELS[record.status]),
                     record.prog_id or "",
                     record.target_path or "",
+                    record.suggested_path or "",
                     translate_reason(record.reason or ""),
                 ),
             )

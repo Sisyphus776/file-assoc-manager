@@ -45,6 +45,7 @@ ZH_TABLE: dict[str, str] = {
     "Status": "状态",
     "ProgID": "ProgID",
     "Program Path": "程序路径",
+    "Suggested path": "疑似新路径",
     "Note": "说明",
     # 来源类型
     "System default": "系统默认",

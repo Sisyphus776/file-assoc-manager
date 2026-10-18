@@ -18,6 +18,7 @@ For Windows users tired of ghost entries in "Open with", and for anyone who want
 
 - 查看扩展名、ProgID、打开命令和解析出的程序路径；
 - 把关联分为 `有效 / 失效 / 无法判断`，每条「无法判断」都给出原因；
+- 判定失效时，若在同一安装目录下找到同名程序，给出「疑似新路径」提示（不改变失效判定）；
 - 清理失效的「打开方式」残留：`OpenWithList` 条目、`OpenWithProgids` 条目、用户级失效关联定义；
 - 每次修改前自动备份（`.reg` 快照 + JSON 操作日志），支持按条恢复；
 - 为便携软件注册 `FAM.*` ProgID，撤销时还原注册前的默认值。
@@ -108,6 +109,7 @@ It is **not** a default-app replacer: it does not forge the `UserChoice` hash an
 
 - Inspect extensions, ProgIDs, open commands and the resolved executable path;
 - Classify every association as valid / invalid / unknown, with a stated reason for each unknown;
+- When a path is missing, look for the same executable inside the same install folder and show a "suggested path" hint (the entry stays invalid);
 - Clean invalid "Open with" leftovers: `OpenWithList` entries, `OpenWithProgids` entries, and invalid user-level association definitions;
 - Back up before every change (`.reg` snapshot + JSON operation log) and restore any single item;
 - Register `FAM.*` ProgIDs for portable apps, restoring the previous default on undo.

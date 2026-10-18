@@ -46,3 +46,5 @@ class Association:
     target_path: str | None
     status: Status
     reason: str | None = None
+    # 精确路径不存在时，在同一安装目录内找到的同名程序（仅作提示，不改变判定）
+    suggested_path: str | None = None
